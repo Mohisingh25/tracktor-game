@@ -11,7 +11,9 @@ namespace TractorSim
     {
         public const int TractorLayer = 2; // "Ignore Raycast" so wheel casts don't hit our own colliders
 
-        public static TractorController Build(TractorSpec spec, Vector3 pos, Quaternion rot, Color bodyColor)
+        public static Color C(float[] rgb) { return new Color(rgb[0], rgb[1], rgb[2]); }
+
+        public static TractorController Build(TractorSpec spec, Vector3 pos, Quaternion rot)
         {
             var root = new GameObject("Tractor_" + spec.id);
             root.transform.SetPositionAndRotation(pos, rot);
@@ -29,12 +31,16 @@ namespace TractorSim
             float zr = -spec.wheelBase * 0.5f, zf = spec.wheelBase * 0.5f;
             float xr = spec.trackRear * 0.5f, xf = spec.trackFront * 0.5f;
 
-            AddBox(root, new Vector3(0, 0.95f, 0.9f), new Vector3(0.66f, 0.75f, 1.9f));
-            AddBox(root, new Vector3(0, 0.72f, 1.97f), new Vector3(0.62f, 0.35f, 0.25f));
-            AddBox(root, new Vector3(0, 0.95f, -0.55f), new Vector3(0.7f, 0.9f, 1.0f));
-            AddBox(root, new Vector3(xr, 1.15f, zr), new Vector3(0.46f, 0.55f, 1.1f));
-            AddBox(root, new Vector3(-xr, 1.15f, zr), new Vector3(0.46f, 0.55f, 1.1f));
-            AddBox(root, new Vector3(0, 0.5f, zr - 0.5f), new Vector3(0.3f, 0.15f, 0.3f));
+            // body colliders follow the same scaling as the visual model (designed around a 1.96 m wheelbase)
+            float sc = spec.bodyScale, sz = spec.wheelBase / 1.96f;
+            System.Func<Vector3, Vector3> S = v => new Vector3(v.x * sc, v.y * sc, v.z * sz);
+            AddBox(root, S(new Vector3(0, 0.95f, 0.9f)), S(new Vector3(0.66f, 0.75f, 1.9f)));
+            AddBox(root, S(new Vector3(0, 0.72f, 1.97f)), S(new Vector3(0.62f, 0.35f, 0.25f)));
+            AddBox(root, S(new Vector3(0, 0.95f, -0.55f)), S(new Vector3(0.7f, 0.9f, 1.0f)));
+            AddBox(root, new Vector3(xr, 1.15f * sc, zr), new Vector3(0.46f * sc, 0.55f * sc, 1.1f * sc));
+            AddBox(root, new Vector3(-xr, 1.15f * sc, zr), new Vector3(0.46f * sc, 0.55f * sc, 1.1f * sc));
+            AddBox(root, new Vector3(0, 0.5f * sc, zr - 0.5f * sc), new Vector3(0.3f, 0.15f, 0.3f) * sc);
+            if (spec.style == BodyStyle.Cabin) AddBox(root, S(new Vector3(0, 1.95f, -0.55f)), S(new Vector3(1.3f, 1.25f, 1.45f)));
             AddWheelCollider(root, new Vector3(xr, spec.rearWheelRadius, zr), 1.2f, spec.rearWheelWidth * 0.95f);
             AddWheelCollider(root, new Vector3(-xr, spec.rearWheelRadius, zr), 1.2f, spec.rearWheelWidth * 0.95f);
             AddWheelCollider(root, new Vector3(xf, spec.frontWheelRadius, zf), 0.66f, spec.frontWheelWidth);
@@ -42,17 +48,18 @@ namespace TractorSim
             rb.centerOfMass = new Vector3(0f, spec.centerOfMassHeight, spec.centerOfMassZ);
 
             // ---------------- wheels ----------------
-            float rearTravel = 0.08f, frontTravel = 0.14f;
-            float rearK = 180000f, frontK = 80000f;
+            float rearTravel = spec.rearTravel, frontTravel = spec.frontTravel;
+            float rearK = spec.rearSpring, frontK = spec.frontSpring;
             float g = 9.81f;
-            float rearLoad = spec.massKg * g * 0.63f * 0.5f, frontLoad = spec.massKg * g * 0.37f * 0.5f;
+            float rearShare = Mathf.Clamp01((zf - spec.centerOfMassZ) / spec.wheelBase);
+            float rearLoad = spec.massKg * g * rearShare * 0.5f, frontLoad = spec.massKg * g * (1f - rearShare) * 0.5f;
             float rearAnchorY = spec.rearWheelRadius + rearTravel - rearLoad / rearK;
             float frontAnchorY = spec.frontWheelRadius + frontTravel - frontLoad / frontK;
             var wheels = new WheelState[4];
-            wheels[0] = MakeWheel("FL", true, true, false, new Vector3(-xf, frontAnchorY, zf), spec.frontWheelRadius, spec.frontWheelWidth, frontTravel, frontK, 3900f);
-            wheels[1] = MakeWheel("FR", true, false, false, new Vector3(xf, frontAnchorY, zf), spec.frontWheelRadius, spec.frontWheelWidth, frontTravel, frontK, 3900f);
-            wheels[2] = MakeWheel("RL", false, true, true, new Vector3(-xr, rearAnchorY, zr), spec.rearWheelRadius, spec.rearWheelWidth, rearTravel, rearK, 6200f);
-            wheels[3] = MakeWheel("RR", false, false, true, new Vector3(xr, rearAnchorY, zr), spec.rearWheelRadius, spec.rearWheelWidth, rearTravel, rearK, 6200f);
+            wheels[0] = MakeWheel("FL", true, true, spec.fourWheelDrive, new Vector3(-xf, frontAnchorY, zf), spec.frontWheelRadius, spec.frontWheelWidth, frontTravel, frontK, spec.frontDamper);
+            wheels[1] = MakeWheel("FR", true, false, spec.fourWheelDrive, new Vector3(xf, frontAnchorY, zf), spec.frontWheelRadius, spec.frontWheelWidth, frontTravel, frontK, spec.frontDamper);
+            wheels[2] = MakeWheel("RL", false, true, true, new Vector3(-xr, rearAnchorY, zr), spec.rearWheelRadius, spec.rearWheelWidth, rearTravel, rearK, spec.rearDamper);
+            wheels[3] = MakeWheel("RR", false, false, true, new Vector3(xr, rearAnchorY, zr), spec.rearWheelRadius, spec.rearWheelWidth, rearTravel, rearK, spec.rearDamper);
 
             var physics = root.AddComponent<VehiclePhysics>();
             var controller = root.AddComponent<TractorController>();
@@ -61,8 +68,15 @@ namespace TractorSim
 
             // ---------------- visuals ----------------
             var vis = root.AddComponent<TractorVisuals>();
-            BuildModel(root.transform, spec, bodyColor, vis, wheels);
+            BuildModel(root.transform, spec, vis, wheels);
+            ApplyArt(root.transform, spec, vis);
             vis.Init(controller, physics);
+
+            // ---------------- hitch points & attachment manager ----------------
+            var drawbar = Anchor(root.transform, "HitchDrawbar", new Vector3(0, 0.5f * sc, zr - 0.72f * sc));
+            var threePoint = Anchor(root.transform, "Hitch3P", new Vector3(0, 0.55f * sc, zr - 0.55f * sc));
+            var am = root.AddComponent<AttachmentManager>();
+            am.Init(controller, drawbar, threePoint);
             return controller;
         }
 
@@ -95,8 +109,13 @@ namespace TractorSim
         }
 
         // =====================================================================
-        static void BuildModel(Transform root, TractorSpec spec, Color bodyColor, TractorVisuals vis, WheelState[] wheels)
+        static void BuildModel(Transform root, TractorSpec realSpec, TractorVisuals vis, WheelState[] wheels)
         {
+            // The body is modelled once at "unit" size (the 47 HP reference tractor) and then scaled
+            // to each brand's proportions; wheels are always built at their true sizes.
+            var spec = TractorCatalog.Get("haldhar47");
+            Color bodyColor = C(realSpec.bodyRgb);
+            Color accent = C(realSpec.accentRgb);
             var red = MatLib.Opaque(bodyColor, 0.55f, 0.15f);
             var redDark = MatLib.Opaque(bodyColor * 0.7f, 0.4f, 0.1f);
             var dark = MatLib.Opaque(new Color(0.14f, 0.14f, 0.15f), 0.35f, 0.5f);
@@ -105,12 +124,17 @@ namespace TractorSim
             var black = MatLib.Opaque(new Color(0.05f, 0.05f, 0.05f), 0.15f, 0f);
             var seatMat = MatLib.Opaque(new Color(0.09f, 0.08f, 0.07f), 0.3f, 0f);
             var cream = MatLib.Opaque(new Color(0.88f, 0.85f, 0.78f), 0.5f, 0.1f);
-            var rimMat = MatLib.Opaque(new Color(0.72f, 0.7f, 0.66f), 0.5f, 0.6f);
+            var rimMat = MatLib.Opaque(C(realSpec.rimRgb), 0.5f, 0.6f);
+            var accentMat = MatLib.Opaque(accent, 0.6f, 0.1f);
 
             var visual = new GameObject("Visual").transform;
             visual.SetParent(root, false);
+            var bodyRoot = new GameObject("Body").transform;      // scaled to the brand's proportions
+            bodyRoot.SetParent(visual, false);
+            bodyRoot.localScale = new Vector3(realSpec.bodyScale, realSpec.bodyScale, realSpec.wheelBase / 1.96f);
+            vis.bodyRoot = bodyRoot;
             var stat = new GameObject("Static").transform;
-            stat.SetParent(visual, false);
+            stat.SetParent(bodyRoot, false);
 
             float zr = -spec.wheelBase * 0.5f, zf = spec.wheelBase * 0.5f;
             float xr = spec.trackRear * 0.5f, xf = spec.trackFront * 0.5f;
@@ -192,14 +216,24 @@ namespace TractorSim
             }
             MeshUtil.CombineByMaterial(stat.gameObject);
 
-            // --- branding decal (original name) ---
-            AddDecal(visual, spec.displayName.ToUpper(), new Vector3(0.315f, 1.1f, 1.05f), new Vector3(0, -90, 0));
-            AddDecal(visual, spec.displayName.ToUpper(), new Vector3(-0.315f, 1.1f, 1.05f), new Vector3(0, 90, 0));
+            // --- brand highlight: accent stripe panel + company name on both bonnet sides and the grille ---
+            var deco = new GameObject("Brand").transform; deco.SetParent(bodyRoot, false);
+            for (int sgn = -1; sgn <= 1; sgn += 2)
+            {
+                MeshUtil.Box(deco, new Vector3(sgn * 0.313f, 1.08f, 1.0f), new Vector3(0.01f, 0.2f, 1.25f), accentMat, "BrandStripe");
+                AddDecal(deco, realSpec.brand, new Vector3(sgn * 0.32f, 1.08f, 1.0f), new Vector3(0, -90 * sgn, 0), 0.0105f / realSpec.bodyScale * 1.6f, Color.Lerp(bodyColor, Color.black, 0.55f), realSpec.brand.Length > 12 ? 0.85f : 1f);
+                AddDecal(deco, realSpec.model, new Vector3(sgn * 0.32f, 0.9f, 1.25f), new Vector3(0, -90 * sgn, 0), 0.008f, Color.white, 1f);
+            }
+            MeshUtil.Box(deco, new Vector3(0, 1.31f, 1.805f), new Vector3(0.52f, 0.09f, 0.01f), accentMat, "GrillePlate");
+            AddDecal(deco, realSpec.brand, new Vector3(0, 1.31f, 1.815f), new Vector3(0, 180, 0), 0.0045f, Color.Lerp(bodyColor, Color.black, 0.55f), 1f);
+            if (realSpec.style == BodyStyle.Canopy) BuildCanopy(bodyRoot, spec, accentMat, black, realSpec);
+            if (realSpec.style == BodyStyle.Cabin) BuildCabin(bodyRoot, spec, red, accentMat, black, realSpec);
+            vis.driver = BuildDriver(bodyRoot);
 
             // ---------------- moving parts ----------------
             // steering column + wheel (pivot rotates around its local up axis = column axis)
             var column = new GameObject("SteeringColumn").transform;
-            column.SetParent(visual, false);
+            column.SetParent(bodyRoot, false);
             column.localPosition = new Vector3(0, 1.48f, -0.2f);
             column.localEulerAngles = new Vector3(-35f, 0, 0);
             MeshUtil.CylY(column, new Vector3(0, -0.15f, 0), 0.05f, 0.4f, dark, "Column");
@@ -222,31 +256,31 @@ namespace TractorSim
             vis.steeringWheel = wheelPivot;
 
             // pedals (rotate around X at their pivot)
-            vis.clutchPedal = Pedal(visual, new Vector3(-0.28f, 0.95f, -0.12f), dark);
-            vis.brakePedal = Pedal(visual, new Vector3(0.24f, 0.95f, -0.12f), dark);
-            vis.accelPedal = Pedal(visual, new Vector3(0.36f, 0.92f, -0.2f), steel);
+            vis.clutchPedal = Pedal(bodyRoot, new Vector3(-0.28f, 0.95f, -0.12f), dark);
+            vis.brakePedal = Pedal(bodyRoot, new Vector3(0.24f, 0.95f, -0.12f), dark);
+            vis.accelPedal = Pedal(bodyRoot, new Vector3(0.36f, 0.92f, -0.2f), steel);
             // gear levers
-            vis.gearLever = Lever(visual, new Vector3(0.14f, 0.9f, -0.42f), 0.55f, black, MatLib.Opaque(new Color(0.85f, 0.1f, 0.05f), 0.6f, 0f));
-            vis.rangeLever = Lever(visual, new Vector3(-0.14f, 0.9f, -0.45f), 0.45f, black, MatLib.Opaque(new Color(0.95f, 0.75f, 0.1f), 0.6f, 0f));
-            vis.handThrottleLever = Lever(visual, new Vector3(0.24f, 1.38f, -0.18f), 0.16f, black, black);
+            vis.gearLever = Lever(bodyRoot, new Vector3(0.14f, 0.9f, -0.42f), 0.55f, black, MatLib.Opaque(new Color(0.85f, 0.1f, 0.05f), 0.6f, 0f));
+            vis.rangeLever = Lever(bodyRoot, new Vector3(-0.14f, 0.9f, -0.45f), 0.45f, black, MatLib.Opaque(new Color(0.95f, 0.75f, 0.1f), 0.6f, 0f));
+            vis.handThrottleLever = Lever(bodyRoot, new Vector3(0.24f, 1.38f, -0.18f), 0.16f, black, black);
             vis.handThrottleLever.localEulerAngles = new Vector3(0, 0, -70f);
 
             // ---------------- lights ----------------
             vis.headLens = new[] {
-                Lens(visual, new Vector3(0.28f, 1.17f, 1.745f), 0.15f, Color.white),
-                Lens(visual, new Vector3(-0.28f, 1.17f, 1.745f), 0.15f, Color.white) };
+                Lens(bodyRoot, new Vector3(0.28f, 1.17f, 1.745f), 0.15f, Color.white),
+                Lens(bodyRoot, new Vector3(-0.28f, 1.17f, 1.745f), 0.15f, Color.white) };
             vis.tailLens = new[] {
-                LensBox(visual, new Vector3(xr + 0.12f, 1.3f, zr - 0.62f), Color.red),
-                LensBox(visual, new Vector3(-xr - 0.12f, 1.3f, zr - 0.62f), Color.red) };
+                LensBox(bodyRoot, new Vector3(xr + 0.12f, 1.3f, zr - 0.62f), Color.red),
+                LensBox(bodyRoot, new Vector3(-xr - 0.12f, 1.3f, zr - 0.62f), Color.red) };
             vis.indicatorLensL = new[] {
-                LensBox(visual, new Vector3(-0.33f, 1.32f, 1.6f), new Color(1f, 0.55f, 0f)),
-                LensBox(visual, new Vector3(-xr - 0.12f, 1.42f, zr - 0.62f), new Color(1f, 0.55f, 0f)) };
+                LensBox(bodyRoot, new Vector3(-0.33f, 1.32f, 1.6f), new Color(1f, 0.55f, 0f)),
+                LensBox(bodyRoot, new Vector3(-xr - 0.12f, 1.42f, zr - 0.62f), new Color(1f, 0.55f, 0f)) };
             vis.indicatorLensR = new[] {
-                LensBox(visual, new Vector3(0.33f, 1.32f, 1.6f), new Color(1f, 0.55f, 0f)),
-                LensBox(visual, new Vector3(xr + 0.12f, 1.42f, zr - 0.62f), new Color(1f, 0.55f, 0f)) };
+                LensBox(bodyRoot, new Vector3(0.33f, 1.32f, 1.6f), new Color(1f, 0.55f, 0f)),
+                LensBox(bodyRoot, new Vector3(xr + 0.12f, 1.42f, zr - 0.62f), new Color(1f, 0.55f, 0f)) };
             vis.headlights = new[] {
-                Spot(visual, new Vector3(0.28f, 1.17f, 1.8f)),
-                Spot(visual, new Vector3(-0.28f, 1.17f, 1.8f)) };
+                Spot(bodyRoot, new Vector3(0.28f, 1.17f, 1.8f)),
+                Spot(bodyRoot, new Vector3(-0.28f, 1.17f, 1.8f)) };
 
             // ---------------- wheels ----------------
             vis.wheelRoots = new Transform[4];
@@ -259,20 +293,125 @@ namespace TractorSim
                 wr.localPosition = w.anchorLocal - Vector3.up * w.travel * 0.5f;
                 var spin = new GameObject("Spin").transform;
                 spin.SetParent(wr, false);
-                BuildWheel(spin, w, w.front ? 18 : 22, rimMat, black, chrome, w.left);
+                BuildWheel(spin, w, w.front ? (realSpec.fourWheelDrive ? 20 : 18) : 22, rimMat, black, chrome, w.left, realSpec.fourWheelDrive && w.front);
                 MeshUtil.CombineByMaterial(spin.gameObject);
                 vis.wheelRoots[i] = wr;
                 vis.wheelSpin[i] = spin;
             }
 
             // ---------------- effects ----------------
-            vis.exhaust = Effects.Smoke(visual, new Vector3(0.21f, 2.27f, 1.32f));
+            vis.exhaust = Effects.Smoke(bodyRoot, new Vector3(0.21f, 2.27f, 1.32f));
             vis.rearDust = new[] { Effects.Dust(root), Effects.Dust(root) };
 
             // ---------------- camera anchors ----------------
-            vis.cockpitEye = Anchor(visual, "CockpitEye", new Vector3(0, 2.02f, -0.8f));
-            vis.hitchCam = Anchor(root, "HitchCam", new Vector3(0, 1.7f, zr - 0.2f));
-            vis.frontCam = Anchor(root, "FrontCam", new Vector3(0, 1.2f, 3.6f));
+            vis.cockpitEye = Anchor(bodyRoot, "CockpitEye", new Vector3(0, 2.02f, -0.8f));
+            float rs = realSpec.bodyScale;
+            vis.hitchCam = Anchor(root, "HitchCam", new Vector3(0, 1.7f * rs, -realSpec.wheelBase * 0.5f - 0.2f * rs));
+            vis.frontCam = Anchor(root, "FrontCam", new Vector3(0, 1.2f * rs, realSpec.wheelBase * 0.5f + 2.6f * rs));
+        }
+
+        // ---------------- canopy (sun roof, very common on Indian tractors) ----------------
+        static void BuildCanopy(Transform body, TractorSpec unit, Material roofMat, Material postMat, TractorSpec real)
+        {
+            float zr = -unit.wheelBase * 0.5f;
+            var white = MatLib.Opaque(new Color(0.94f, 0.94f, 0.92f), 0.45f, 0.05f);
+            Vector3[] posts = { new Vector3(-0.62f, 0, zr - 0.38f), new Vector3(0.62f, 0, zr - 0.38f), new Vector3(-0.55f, 0, zr + 0.62f), new Vector3(0.55f, 0, zr + 0.62f) };
+            foreach (var p in posts)
+                MeshUtil.Box(body, new Vector3(p.x, 1.92f, p.z), new Vector3(0.05f, 1.05f, 0.05f), postMat, "CanopyPost");
+            MeshUtil.Box(body, new Vector3(0, 2.47f, zr + 0.12f), new Vector3(1.45f, 0.06f, 1.55f), white, "CanopyRoof");
+            MeshUtil.Box(body, new Vector3(0, 2.43f, zr + 0.12f), new Vector3(1.5f, 0.1f, 0.06f), white, "CanopyRib");
+            for (int s = -1; s <= 1; s += 2)
+                MeshUtil.Box(body, new Vector3(s * 0.74f, 2.4f, zr + 0.12f), new Vector3(0.04f, 0.14f, 1.55f), white, "CanopyLip");
+        }
+
+        // ---------------- cab (flagship) ----------------
+        static void BuildCabin(Transform body, TractorSpec unit, Material paint, Material accent, Material frame, TractorSpec real)
+        {
+            float zr = -unit.wheelBase * 0.5f;
+            var glass = MatLib.Transparent(new Color(0.55f, 0.65f, 0.7f, 0.28f), 0.95f);
+            float z0 = zr - 0.42f, z1 = zr + 0.98f, y0 = 1.3f, y1 = 2.58f, hw = 0.66f;
+            float zc = (z0 + z1) * 0.5f, yc = (y0 + y1) * 0.5f;
+            // pillars
+            foreach (var x in new[] { -hw, hw })
+                foreach (var z in new[] { z0, z1, zc + 0.15f })
+                    MeshUtil.Box(body, new Vector3(x, yc, z), new Vector3(0.06f, y1 - y0, 0.06f), frame, "CabPillar");
+            // glass panels
+            MeshUtil.Box(body, new Vector3(0, yc, z1), new Vector3(hw * 2f, y1 - y0, 0.02f), glass, "Windscreen");
+            MeshUtil.Box(body, new Vector3(0, yc, z0), new Vector3(hw * 2f, y1 - y0, 0.02f), glass, "RearGlass");
+            MeshUtil.Box(body, new Vector3(-hw, yc, zc), new Vector3(0.02f, y1 - y0, z1 - z0), glass, "DoorL");
+            MeshUtil.Box(body, new Vector3(hw, yc, zc), new Vector3(0.02f, y1 - y0, z1 - z0), glass, "DoorR");
+            // roof, beacon, work lights
+            MeshUtil.Box(body, new Vector3(0, y1 + 0.06f, zc), new Vector3(hw * 2f + 0.12f, 0.12f, z1 - z0 + 0.18f), paint, "CabRoof");
+            MeshUtil.Box(body, new Vector3(0, y1 + 0.13f, zc), new Vector3(hw * 2f - 0.1f, 0.03f, z1 - z0 - 0.1f), accent, "CabRoofStripe");
+            MeshUtil.CylY(body, new Vector3(-0.45f, y1 + 0.2f, z0 + 0.15f), 0.12f, 0.12f, MatLib.Emissive(new Color(1f, 0.6f, 0.05f), new Color(0.8f, 0.4f, 0f)), "Beacon");
+            for (int s = -1; s <= 1; s += 2)
+                MeshUtil.Box(body, new Vector3(s * 0.4f, y1 + 0.02f, z1 + 0.12f), new Vector3(0.16f, 0.08f, 0.06f), MatLib.Emissive(Color.white, new Color(0.5f, 0.5f, 0.45f)), "WorkLight");
+            // wiper
+            MeshUtil.Box(body, new Vector3(0.1f, y0 + 0.35f, z1 + 0.02f), new Vector3(0.02f, 0.6f, 0.02f), frame, "Wiper", new Vector3(0, 0, 35f));
+        }
+
+        // ---------------- seated driver ----------------
+        static Transform BuildDriver(Transform body)
+        {
+            var d = new GameObject("Driver").transform; d.SetParent(body, false);
+            var skin = MatLib.Opaque(new Color(0.55f, 0.37f, 0.25f), 0.25f, 0f);
+            var shirt = MatLib.Opaque(new Color(0.15f, 0.55f, 0.2f), 0.2f, 0f);
+            var pants = MatLib.Opaque(new Color(0.82f, 0.82f, 0.8f), 0.2f, 0f);
+            var hair = MatLib.Opaque(new Color(0.08f, 0.06f, 0.05f), 0.3f, 0f);
+            var shoes = MatLib.Opaque(new Color(0.12f, 0.09f, 0.07f), 0.3f, 0f);
+            // torso & head
+            MeshUtil.Part(d, PrimitiveType.Capsule, new Vector3(0, 1.58f, -0.86f), new Vector3(0.36f, 0.3f, 0.24f), new Vector3(-6, 0, 0), shirt, "Torso");
+            MeshUtil.Part(d, PrimitiveType.Sphere, new Vector3(0, 2.0f, -0.83f), new Vector3(0.2f, 0.24f, 0.22f), Vector3.zero, skin, "Head");
+            MeshUtil.Part(d, PrimitiveType.Sphere, new Vector3(0, 2.06f, -0.85f), new Vector3(0.21f, 0.16f, 0.22f), Vector3.zero, hair, "Hair");
+            MeshUtil.Part(d, PrimitiveType.Cylinder, new Vector3(0, 1.86f, -0.85f), new Vector3(0.09f, 0.05f, 0.09f), Vector3.zero, skin, "Neck");
+            // arms reaching to the steering wheel
+            for (int s = -1; s <= 1; s += 2)
+            {
+                MeshUtil.Part(d, PrimitiveType.Capsule, new Vector3(s * 0.21f, 1.62f, -0.72f), new Vector3(0.09f, 0.16f, 0.09f), new Vector3(55f, 0, s * -10f), shirt, "UpperArm");
+                MeshUtil.Part(d, PrimitiveType.Capsule, new Vector3(s * 0.17f, 1.58f, -0.47f), new Vector3(0.075f, 0.15f, 0.075f), new Vector3(100f, 0, s * -25f), skin, "Forearm");
+                // thighs forward, shins down to the pedals
+                MeshUtil.Part(d, PrimitiveType.Capsule, new Vector3(s * 0.11f, 1.3f, -0.62f), new Vector3(0.14f, 0.22f, 0.14f), new Vector3(90f, 0, 0), pants, "Thigh");
+                MeshUtil.Part(d, PrimitiveType.Capsule, new Vector3(s * 0.12f, 1.05f, -0.4f), new Vector3(0.11f, 0.2f, 0.11f), new Vector3(-15f, 0, 0), pants, "Shin");
+                MeshUtil.Part(d, PrimitiveType.Cube, new Vector3(s * 0.12f, 0.86f, -0.33f), new Vector3(0.1f, 0.07f, 0.24f), Vector3.zero, shoes, "Shoe");
+            }
+            MeshUtil.CombineByMaterial(d.gameObject);
+            return d;
+        }
+
+        // ---------------- real 3D art from the ArtCatalog (optional) ----------------
+        static void ApplyArt(Transform root, TractorSpec spec, TractorVisuals vis)
+        {
+            var cat = ArtCatalog.Load();
+            var art = cat != null ? cat.FindTractor(spec.id) : null;
+            if (art == null || art.model == null) return;
+            var model = Object.Instantiate(art.model);
+            model.name = "ArtModel";
+            model.transform.SetParent(vis.bodyRoot.parent, false);   // under Visual, not scaled
+            model.transform.localPosition = art.offset;
+            model.transform.localEulerAngles = art.euler;
+            model.transform.localScale = Vector3.one * (art.scale <= 0f ? 1f : art.scale);
+            foreach (var c in model.GetComponentsInChildren<Collider>()) Object.Destroy(c);
+            foreach (var r in model.GetComponentsInChildren<Rigidbody>()) Object.Destroy(r);
+            // hide the procedural body (keep moving cab controls hidden too – the model has its own)
+            var stat = vis.bodyRoot.Find("Static"); if (stat != null) stat.gameObject.SetActive(false);
+            if (art.hideBrandDecals) { var b = vis.bodyRoot.Find("Brand"); if (b != null) b.gameObject.SetActive(false); }
+            var wheelNames = new[] { art.wheelFL, art.wheelFR, art.wheelRL, art.wheelRR };
+            bool any = false;
+            vis.artWheels = new Transform[4];
+            for (int i = 0; i < 4; i++)
+            {
+                if (string.IsNullOrEmpty(wheelNames[i])) continue;
+                vis.artWheels[i] = FindDeep(model.transform, wheelNames[i]);
+                if (vis.artWheels[i] != null) any = true;
+            }
+            if (any && vis.wheelRoots != null) foreach (var w in vis.wheelRoots) if (w != null) w.gameObject.SetActive(false);
+        }
+
+        static Transform FindDeep(Transform t, string name)
+        {
+            if (t.name == name) return t;
+            foreach (Transform c in t) { var r = FindDeep(c, name); if (r != null) return r; }
+            return null;
         }
 
         static Transform Anchor(Transform parent, string name, Vector3 p)
@@ -283,7 +422,7 @@ namespace TractorSim
             return t;
         }
 
-        static void BuildWheel(Transform spin, WheelState w, int lugs, Material rim, Material rubber, Material chrome, bool left)
+        static void BuildWheel(Transform spin, WheelState w, int lugs, Material rim, Material rubber, Material chrome, bool left, bool lugged = false)
         {
             float d = w.radius * 2f;
             float side = left ? -1f : 1f;
@@ -307,7 +446,7 @@ namespace TractorSim
                 float rad = a * Mathf.Deg2Rad;
                 float rr = w.radius * 0.975f;
                 var p = new Vector3(0, Mathf.Cos(rad) * rr, Mathf.Sin(rad) * rr);
-                if (w.driven)
+                if (w.driven || lugged)
                 {
                     for (int s = -1; s <= 1; s += 2)
                     {
@@ -372,20 +511,20 @@ namespace TractorSim
             return l;
         }
 
-        static void AddDecal(Transform parent, string text, Vector3 pos, Vector3 euler)
+        static void AddDecal(Transform parent, string text, Vector3 pos, Vector3 euler, float size, Color color, float squeeze)
         {
             var go = new GameObject("Decal");
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;
             go.transform.localEulerAngles = euler;
-            go.transform.localScale = Vector3.one * 0.022f;
+            go.transform.localScale = new Vector3(size * squeeze, size, size);
             var tm = go.AddComponent<TextMesh>();
             tm.text = text;
             tm.font = UIFactory.DefaultFont;
-            tm.fontSize = 48;
+            tm.fontSize = 64;
             tm.fontStyle = FontStyle.Bold;
             tm.anchor = TextAnchor.MiddleCenter;
-            tm.color = new Color(0.95f, 0.93f, 0.88f);
+            tm.color = color;
             go.GetComponent<MeshRenderer>().sharedMaterial = UIFactory.DefaultFont.material;
         }
     }

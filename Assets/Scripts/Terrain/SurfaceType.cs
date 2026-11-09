@@ -53,6 +53,50 @@ namespace TractorSim
             return k;
         }
 
+        /// <summary>Surface at a contact point: tagged colliders, or the dominant painted layer of a Unity Terrain.</summary>
+        public static SurfaceKind Of(Collider c, Vector3 point)
+        {
+            var tc = c as TerrainCollider;
+            if (tc != null)
+            {
+                var ts = tc.GetComponent<TerrainSurface>();
+                if (ts != null) return ts.KindAt(point);
+            }
+            return Of(c);
+        }
+
         public static void ClearCache() { lookup.Clear(); }
+    }
+}
+
+namespace TractorSim
+{
+    /// <summary>Maps the terrain's splat (texture) layers to physical surfaces.</summary>
+    public class TerrainSurface : MonoBehaviour
+    {
+        public SurfaceKind[] layerKinds;
+        Terrain terrain;
+        float[,,] alpha; int aw, ah;
+
+        public void Init(Terrain t, SurfaceKind[] kinds)
+        {
+            terrain = t; layerKinds = kinds;
+            var td = t.terrainData;
+            aw = td.alphamapWidth; ah = td.alphamapHeight;
+            alpha = td.GetAlphamaps(0, 0, aw, ah);
+        }
+
+        public SurfaceKind KindAt(Vector3 world)
+        {
+            if (terrain == null || alpha == null) return SurfaceKind.Dirt;
+            var td = terrain.terrainData;
+            Vector3 local = world - terrain.transform.position;
+            int x = Mathf.Clamp((int)(local.x / td.size.x * (aw - 1)), 0, aw - 1);
+            int z = Mathf.Clamp((int)(local.z / td.size.z * (ah - 1)), 0, ah - 1);
+            int best = 0; float bv = -1f;
+            int layers = alpha.GetLength(2);
+            for (int l = 0; l < layers; l++) { float v = alpha[z, x, l]; if (v > bv) { bv = v; best = l; } }
+            return best < layerKinds.Length ? layerKinds[best] : SurfaceKind.Dirt;
+        }
     }
 }

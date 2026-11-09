@@ -12,6 +12,9 @@ namespace TractorSim
         public ParticleSystem exhaust;
         public ParticleSystem[] rearDust;
         public Transform cockpitEye, hitchCam, frontCam;
+        public Transform bodyRoot, driver;
+        public Transform[] artWheels;          // wheels of an imported 3D model (optional)
+        Quaternion[] artWheelBase;
 
         TractorController ctrl;
         VehiclePhysics phys;
@@ -26,6 +29,11 @@ namespace TractorSim
             ctrl = c; phys = p;
             visualRoot = transform.Find("Visual");
             if (steeringWheel != null) steerBase = steeringWheel.localRotation;
+            if (artWheels != null)
+            {
+                artWheelBase = new Quaternion[artWheels.Length];
+                for (int i = 0; i < artWheels.Length; i++) if (artWheels[i] != null) artWheelBase[i] = artWheels[i].localRotation;
+            }
             c.OnStarterBegin += () => smokeBurst = 1.2f;
             c.OnGrind += () => { };
             UpdateLights(true);
@@ -46,6 +54,8 @@ namespace TractorSim
                 wheelRoots[i].position = c;
                 wheelRoots[i].rotation = transform.rotation * Quaternion.Euler(0f, w.steerDeg, 0f);
                 wheelSpin[i].localRotation = Quaternion.Euler(w.spinDeg, 0f, 0f);
+                if (artWheels != null && i < artWheels.Length && artWheels[i] != null)
+                    artWheels[i].localRotation = artWheelBase[i] * Quaternion.Euler(0f, w.front ? w.steerDeg : 0f, 0f) * Quaternion.Euler(w.spinDeg, 0f, 0f);
             }
 
             // ---- controls in the cab ----
@@ -142,6 +152,7 @@ namespace TractorSim
                 float slip = Mathf.Abs(w.slipSpeed);
                 float speed = Mathf.Abs(w.vLong);
                 float intensity = 0f;
+                if (pr.dustColor.a <= 0.01f) continue;
                 if (pr.muddy) intensity = Mathf.Clamp01(slip * 0.35f + speed * 0.04f);
                 else if (pr.dusty) intensity = Mathf.Clamp01(slip * 0.25f + Mathf.Max(0f, speed - 2f) * 0.06f);
                 if (intensity < 0.05f || pr.dustColor.a <= 0.01f) continue;

@@ -25,6 +25,9 @@ namespace TractorSim.EditorTools
         {
             ConfigurePlayer();
             CreateMaterials();
+            CreateArtCatalog();
+            IncludeShaders();
+            PostFxSetup.CreateCameraRig();
             CreateScene();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -152,6 +155,9 @@ namespace TractorSim.EditorTools
             if (psh == null) psh = Shader.Find("Particles/Standard Unlit");
             if (psh != null) Save(new Material(psh) { name = "Particle" }, "Particle");
 
+            var terrainSh = Shader.Find("Nature/Terrain/Standard");
+            if (terrainSh != null) Save(new Material(terrainSh) { name = "Terrain" }, "Terrain");
+
             var sky = Shader.Find("Skybox/Procedural");
             if (sky != null)
             {
@@ -163,6 +169,49 @@ namespace TractorSim.EditorTools
                 m.SetFloat("_Exposure", 1.25f);
                 Save(m, "Sky");
             }
+        }
+
+        /// <summary>Art slots: created once, never overwritten (your assignments are kept).</summary>
+        static void CreateArtCatalog()
+        {
+            const string path = "Assets/Resources/ArtCatalog.asset";
+            if (AssetDatabase.LoadAssetAtPath<ArtCatalog>(path) != null) return;
+            var cat = ScriptableObject.CreateInstance<ArtCatalog>();
+            var ids = TractorCatalog.Ids;
+            cat.tractors = new ArtCatalog.TractorArt[ids.Length];
+            for (int i = 0; i < ids.Length; i++) cat.tractors[i] = new ArtCatalog.TractorArt { tractorId = ids[i], scale = 1f };
+            var imp = ImplementFactory.Ids;
+            cat.implements = new ArtCatalog.ImplementArt[imp.Length];
+            for (int i = 0; i < imp.Length; i++) cat.implements[i] = new ArtCatalog.ImplementArt { implementId = imp[i], scale = 1f };
+            AssetDatabase.CreateAsset(cat, path);
+        }
+
+        /// <summary>The world is generated at runtime, so make sure the shaders it needs ship in the build.</summary>
+        static void IncludeShaders()
+        {
+            string[] names = {
+                "Standard", "Legacy Shaders/Particles/Alpha Blended", "Skybox/Procedural",
+                "Nature/Terrain/Standard", "Nature/Terrain/Diffuse",
+                "Hidden/TerrainEngine/Splatmap/Standard-AddPass", "Hidden/TerrainEngine/Splatmap/Standard-Base", "Hidden/TerrainEngine/Splatmap/Standard-BaseGen",
+                "Hidden/TerrainEngine/Details/WavingDoublePass", "Hidden/TerrainEngine/Details/BillboardWavingDoublePass", "Hidden/TerrainEngine/Details/Vertexlit",
+                "Hidden/TerrainEngine/CameraFacingBillboardTree", "GUI/Text Shader"
+            };
+            var gs = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset");
+            if (gs == null || gs.Length == 0) return;
+            var so = new SerializedObject(gs[0]);
+            var arr = so.FindProperty("m_AlwaysIncludedShaders");
+            if (arr == null) return;
+            foreach (var n in names)
+            {
+                var sh = Shader.Find(n);
+                if (sh == null) continue;
+                bool present = false;
+                for (int i = 0; i < arr.arraySize; i++) if (arr.GetArrayElementAtIndex(i).objectReferenceValue == sh) { present = true; break; }
+                if (present) continue;
+                arr.InsertArrayElementAtIndex(arr.arraySize);
+                arr.GetArrayElementAtIndex(arr.arraySize - 1).objectReferenceValue = sh;
+            }
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         static void Save(Material m, string name)
@@ -185,6 +234,27 @@ namespace TractorSim.EditorTools
             var sky = AssetDatabase.LoadAssetAtPath<Material>(MatDir + "/Sky.mat");
             if (sky != null) RenderSettings.skybox = sky;
             RenderSettings.ambientMode = AmbientMode.Trilight;
+            // A tiny terrain far below the world makes the build keep terrain/grass shaders & variants.
+            if (!AssetDatabase.IsValidFolder("Assets/Generated")) AssetDatabase.CreateFolder("Assets", "Generated");
+            var blades = TractorSim.ProcTex.GrassBlades();
+            var bladesCopy = new Texture2D(blades.width, blades.height, TextureFormat.RGBA32, false);
+            bladesCopy.SetPixels(blades.GetPixels()); bladesCopy.Apply();
+            AssetDatabase.CreateAsset(bladesCopy, "Assets/Generated/GrassBlades.asset");
+            var layerTex = new Texture2D(4, 4); layerTex.Apply();
+            AssetDatabase.CreateAsset(layerTex, "Assets/Generated/LayerTex.asset");
+            var tl = new TerrainLayer { diffuseTexture = layerTex, tileSize = Vector2.one };
+            AssetDatabase.CreateAsset(tl, "Assets/Generated/ShaderKeepLayer.terrainlayer");
+            var td = new TerrainData { heightmapResolution = 33, size = new Vector3(4, 1, 4) };
+            td.terrainLayers = new[] { tl };
+            td.detailPrototypes = new[] { new DetailPrototype { prototypeTexture = bladesCopy, renderMode = DetailRenderMode.GrassBillboard } };
+            td.SetDetailResolution(32, 16);
+            AssetDatabase.CreateAsset(td, "Assets/Generated/ShaderKeepTerrain.asset");
+            var tgo = Terrain.CreateTerrainGameObject(td);
+            tgo.name = "ShaderKeepTerrain";
+            tgo.transform.position = new Vector3(0, -2000f, 0);
+            var tmat = AssetDatabase.LoadAssetAtPath<Material>(MatDir + "/Terrain.mat");
+            if (tmat != null) tgo.GetComponent<Terrain>().materialTemplate = tmat;
+
             // The game builds itself at runtime (GameBootstrap); a marker object documents that.
             var marker = new GameObject("README – world is generated at runtime by TractorSim.GameBootstrap");
             marker.hideFlags = HideFlags.None;

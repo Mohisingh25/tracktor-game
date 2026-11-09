@@ -123,8 +123,8 @@ namespace TractorSim
                 if (inp.GearDown()) Shift(-1);
                 if (inp.RangeToggle())
                 {
-                    int target = Gearbox.Range == 0 ? 1 : 0;
-                    if (Gearbox.TrySetRange(target, Drivetrain.ClutchFree, Physics.SpeedKmh)) { Msg(target == 1 ? "High range" : "Low range", false); if (OnShift != null) OnShift(); }
+                    int target = (Gearbox.Range + 1) % Gearbox.RangeCount;
+                    if (Gearbox.TrySetRange(target, Drivetrain.ClutchFree, Physics.SpeedKmh)) { Msg("Range " + Gearbox.RangeName(target), false); if (OnShift != null) OnShift(); }
                     else Grind();
                 }
                 inp.DirectionToggle();

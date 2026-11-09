@@ -14,12 +14,13 @@ namespace TractorSim
         public float masterVolume = 0.9f;
 
         // shared with the audio thread
-        volatile float rpm, load, running, cranking, horn;
+        volatile float rpm, load, running, cranking, horn, cylinders = 3f;
         int sampleRate;
         double phase, hornPhase1, hornPhase2, starterPhase;
         float lp1, lp2, noiseLp, hornLp, cycleGain = 1f, cycleNoise;
         uint rng = 22222;
         float smoothedRpm, smoothedLoad, smoothedRun;
+        AudioSource src;
 
         void Start()
         {
@@ -36,13 +37,15 @@ namespace TractorSim
             if (tractor == null) return;
             var e = tractor.Engine;
             rpm = e.Rpm;
+            cylinders = tractor.Spec.cylinders;
             load = Mathf.Clamp01(e.Rack);
             running = e.Running ? 1f : 0f;
             cranking = e.Cranking ? 1f : 0f;
             horn = tractor.Horn ? 1f : 0f;
             var cam = Camera.main;
             float dist = cam != null ? Vector3.Distance(cam.transform.position, tractor.transform.position) : 5f;
-            GetComponent<AudioSource>().volume = masterVolume * Mathf.Clamp(6f / Mathf.Max(3f, dist), 0.15f, 1f);
+            if (src == null) src = GetComponent<AudioSource>();
+            src.volume = masterVolume * Mathf.Clamp(6f / Mathf.Max(3f, dist), 0.15f, 1f);
         }
 
         float Rand()
@@ -62,7 +65,7 @@ namespace TractorSim
                 smoothedLoad += (targetLoad - smoothedLoad) * 0.0006f;
                 smoothedRun += (targetRun - smoothedRun) * 0.0004f;
 
-                float fire = smoothedRpm / 40f;               // 3-cyl 4-stroke firing frequency
+                float fire = smoothedRpm * cylinders / 120f;  // 4-stroke firing frequency
                 double prev = phase;
                 phase += fire / sr;
                 if (phase >= 1.0)

@@ -25,6 +25,11 @@ namespace TractorSim
         public float damage;
         public float bestTestLapSec;
         public int sessions;
+        public long money = 25000;
+        public string tractorId = "golu35";
+        public int mapId;
+        public int deliveries;
+        public float bestMountainSec;
     }
 
     /// <summary>Local persistence (PlayerPrefs + JsonUtility). Survives app restarts.</summary>

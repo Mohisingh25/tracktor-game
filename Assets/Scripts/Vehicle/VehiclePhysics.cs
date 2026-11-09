@@ -41,6 +41,7 @@ namespace TractorSim
         public float ExtraRollingForce;                    // external drag (future implements/trolleys)
 
         Drivetrain drivetrain;
+        readonly WheelContact[] contacts = new WheelContact[4];
         TractorSpec spec;
         const float CastLift = 0.35f;
         int layerMask;
@@ -57,7 +58,7 @@ namespace TractorSim
         public void ResetWheels()
         {
             foreach (var w in Wheels) { w.omega = 0f; w.compression = w.prevCompression = 0f; w.Fx = w.Fy = 0f; }
-            drivetrain.OmegaLeft = drivetrain.OmegaRight = 0f;
+            drivetrain.ResetWheels();
         }
 
         public void Simulate(float dt, SteeringSystem steering, BrakeSystem brakes)
@@ -88,7 +89,7 @@ namespace TractorSim
                     float ext = hit.distance - CastLift - offset;
                     w.grounded = true;
                     w.hitCollider = hit.collider;
-                    var kind = SurfaceZone.Of(hit.collider);
+                    var kind = SurfaceZone.Of(hit.collider, hit.point);
                     if (kind != w.surface) { w.surface = kind; w.props = SurfaceProps.Get(kind); }
                     w.contactNormal = hit.normal;
                     // contact point under the wheel along -up (sphere hit point can be off to the side on edges)
@@ -138,7 +139,7 @@ namespace TractorSim
                 Vector3 v = Body.GetPointVelocity(w.contactPoint);
                 w.vLong = Vector3.Dot(v, fwd);
                 w.vLat = Vector3.Dot(v, side);
-                float mu = w.props.grip * spec.tractionFactor * (w.front ? 0.95f : 1f);
+                float mu = w.props.grip * spec.tractionFactor * (w.front && !spec.fourWheelDrive ? 0.95f : 1f);
                 w.Fy = TireModel.LatForce(w.vLat, w.vLong, w.Fz, mu);
                 // low-speed stiction so a parked tractor doesn't creep sideways down a slope
                 if (Mathf.Abs(w.vLat) < 0.25f && Mathf.Abs(w.vLong) < 1f)
@@ -149,25 +150,39 @@ namespace TractorSim
                 }
             }
 
-            // ---------- 3. drivetrain & rear axle ----------
-            var rl = Wheels[2]; var rr = Wheels[3];
-            var cl = Contact(rl, brakes.LeftTorque);
-            var cr = Contact(rr, brakes.RightTorque);
-            drivetrain.Step(dt, cl, cr, SpeedKmh);
-            rl.omega = drivetrain.OmegaLeft;
-            rr.omega = drivetrain.OmegaRight;
-            rl.Fx = rl.grounded ? drivetrain.AxleForce[0] : 0f;
-            rr.Fx = rr.grounded ? drivetrain.AxleForce[1] : 0f;
+            // ---------- 3. drivetrain & driven wheels ----------
+            var rl = Wheels[2]; var rr = Wheels[3]; var fl = Wheels[0]; var fr = Wheels[1];
+            bool awd = spec.fourWheelDrive;
+            contacts[0] = Contact(rl, brakes.LeftTorque);
+            contacts[1] = Contact(rr, brakes.RightTorque);
+            contacts[2] = Contact(fl, brakes.FrontTorque);
+            contacts[3] = Contact(fr, brakes.FrontTorque);
+            drivetrain.Step(dt, contacts, SpeedKmh);
+            rl.omega = drivetrain.WheelOmega[0];
+            rr.omega = drivetrain.WheelOmega[1];
+            rl.Fx = rl.grounded ? drivetrain.WheelForce[0] : 0f;
+            rr.Fx = rr.grounded ? drivetrain.WheelForce[1] : 0f;
+            if (awd)
+            {
+                fl.omega = drivetrain.WheelOmega[2]; fr.omega = drivetrain.WheelOmega[3];
+                fl.Fx = fl.grounded ? drivetrain.WheelForce[2] : 0f;
+                fr.Fx = fr.grounded ? drivetrain.WheelForce[3] : 0f;
+            }
 
             // ---------- 4. apply tyre forces ----------
             for (int i = 0; i < Wheels.Length; i++)
             {
                 var w = Wheels[i];
-                if (w.front)
+                if (w.front && !awd)
                 {
-                    // free-rolling front wheels
+                    // free-rolling front wheels, optionally braked (ABS-like: never more than the grip)
                     w.omega = w.grounded ? w.vLong / w.radius : w.omega * (1f - dt * 0.5f);
                     w.Fx = 0f;
+                    if (brakes.FrontTorque > 0f && w.grounded)
+                    {
+                        float fb = Mathf.Min(brakes.FrontTorque / w.radius, w.props.grip * w.Fz * 0.95f);
+                        w.Fx = -fb * Mathf.Clamp(w.vLong / 0.5f, -1f, 1f);
+                    }
                 }
                 w.spinDeg += w.omega * Mathf.Rad2Deg * dt;
                 if (w.spinDeg > 360f || w.spinDeg < -360f) w.spinDeg %= 360f;
@@ -186,12 +201,17 @@ namespace TractorSim
                 float mu = w.props.grip * spec.tractionFactor;
                 float max = mu * w.Fz * 1.05f;
                 float mag = Mathf.Sqrt(fx * fx + fy * fy);
-                if (mag > max && mag > 0f) { float s = max / mag; fy *= s; if (!w.driven) fx *= s; }
+                bool drivenNow = w.driven || (w.front && awd);
+                if (mag > max && mag > 0f) { float s = max / mag; fy *= s; if (!drivenNow) fx *= s; }
                 w.Fy = fy;
 
                 Vector3 at = Vector3.Lerp(w.contactPoint, w.centerWorld, 0.45f);
                 Body.AddForceAtPosition(fwd * fx + side * fy, at, ForceMode.Force);
             }
+
+            // aerodynamic drag (matters for the 120 km/h flagship)
+            Vector3 bodyVel = Body.linearVelocity;
+            Body.AddForce(-bodyVel * bodyVel.magnitude * (0.6f * spec.dragArea), ForceMode.Force);
 
             if (ExtraRollingForce > 0f && Mathf.Abs(SpeedMs) > 0.05f)
                 Body.AddForce(-t.forward * Mathf.Sign(SpeedMs) * ExtraRollingForce, ForceMode.Force);

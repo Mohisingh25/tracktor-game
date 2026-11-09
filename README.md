@@ -1,12 +1,21 @@
-# Indian Tractor Simulator 3D: Stage 1
+# Indian Tractor Simulator 3D
 
-This is a Unity 6 (Built-in Render Pipeline, C#) Android project. Stage 1 gives you **one fully drivable tractor** with
-realistic physics, manual and automatic transmissions, mobile touch controls and a proving ground in a North-Indian setting.
+This is a Unity 6 project (built-in render pipeline with post-processing, C#) for **Android (APK)** and **Mac (DMG)**.
+It's on Stage 2, which adds:
 
-The whole world (terrain, tractor model, UI, audio) is **generated in code at runtime**, so you don't need to set
-anything up in the Unity Editor. You push the repo to GitHub, the workflow builds the APK, and you install it.
-
----
+* **Five tractors in a showroom:** GOLU CHAUDHARY GC-35, ANSHU SINGH AS-50, HALDHAR 47 DI, BHARAT VEER 60 4WD and the flagship **MOHIT SINGH MS-150 TURBO**.
+  The flagship has 150 HP, 4WD, 16 forward + 4 reverse gears, a cab and a top speed of **120 km/h**. It's marked "Best tractor in the game".
+  Every brand has its own power, torque, gears, speed, weight, size, traction and lift/tow capacity. The company name is shown on a highlight stripe on both sides of the bonnet and on the grille.
+* **Manual hitching:** reverse up to a trolley or implement, and ATTACH lights up when you're lined up.
+  * **Trolleys** (single-axle 5 t, double-axle 10 t): an articulated drawbar joint, loadable cargo that raises the centre of gravity, trailer brakes, hydraulic tipping, sway, rollover and cargo spilling.
+  * **3-point implements** (rotavator, cultivator, plough, disc harrow, seed drill, boom sprayer, land leveller): hydraulic lift and lower, PTO power taken from the engine, and soil drag that loads the tractor.
+    The field changes colour where you've worked it, from stubble to cultivated, ploughed, rotavated, sown and sprayed. You're paid per square metre.
+* **Himalayan Cargo Route:** a 1.2 × 1.2 km Unity Terrain mountain with a roughly 3 km ghat road.
+  It has hairpins, cliff drops with guard stones, mud and rock sections, a river ford and a 21 % pitch near the top.
+  You load 4.5 t of apples at the depot, go through 7 checkpoints and tip the load at Pahadgaon.
+* **Village Farm:** the Stage 1 proving ground, plus an implement yard, the working field and a sugarcane run to the sugar mill.
+* **Money:** you earn from field work and deliveries, and pay for recovery (₹500) and for diesel/repairs.
+* **Real-art slots:** drop in Asset Store or Sketchfab models and textures to look truly realistic. See **ART_GUIDE.md**.
 
 ## 1. Get the APK (no local Unity needed)
 
@@ -16,9 +25,9 @@ anything up in the Unity Editor. You push the repo to GitHub, the workflow build
    * `UNITY_PASSWORD`: your Unity account password
    * `UNITY_LICENSE`: the full contents of your Unity Personal `.ulf` licence file
      (see game.ci → Docs → GitHub → Activation → Personal licence). These are the same secrets the spaceflight project uses.
-3. Open the **Actions** tab, choose **Build Android APK**, then **Run workflow**. Every push to `main` also triggers it.
+3. Open the **Actions** tab, choose **Build Android APK + macOS DMG**, then **Run workflow**. Every push to `main` also triggers it.
    The first build takes 30–60 minutes because it downloads Unity; later builds are faster thanks to caching.
-4. Open the finished run and download the **IndianTractorSim-APK** artifact. It's a zip that contains `IndianTractorSim.apk`.
+4. Open the finished run and download **IndianTractorSim-APK** (phone) and/or **IndianTractorSim-DMG** (Mac). The DMG is unsigned: right-click the app → Open, or run `xattr -dr com.apple.quarantine /Applications/IndianTractorSim.app`.
 5. Copy the APK to your phone and install it. You'll need to allow installing from unknown sources.
    The build targets ARM64 (IL2CPP), which covers any Android phone from roughly 2017 onwards.
 
@@ -59,11 +68,12 @@ that version, change it to any `6000.x` version listed on Docker Hub as `unityci
 Hill B (18° up / 25° down), a river ford, a ploughed field, sugarcane and wheat plots, and a village with pucca and kutcha houses, a hand pump,
 a water tank, a tea stall, electric poles with sagging wires, cattle and trees.
 
-## 3. Verification done
+## 3. Verification done (Stage 2: 18 checks, all pass)
 
 * `Tools/DrivetrainTests/DrivetrainTests.cs` is a headless simulation of the drivetrain code that ships in the game. It runs 15 checks
   (idle, starter interlock, L1 pull-away, stall on clutch dump, grind, full 8-gear run, engine braking, braking distance,
-  automatic shifting, auto reverse, hill climb, loaded hill, mud wheelspin, coolant temperature). All 15 pass; see `last-run.txt`.
+  automatic shifting, auto reverse, hill climb, loaded hill, mud wheelspin, coolant temperature, plus the top speed of every brand,
+  Mohit Singh reaching 122 km/h with a 59 m stop from top speed, and the 4WD Bharat Veer climbing a muddy slope that stops the 2WD tractors). See `last-run.txt`.
   To run it: `mcs Tools/DrivetrainTests/DrivetrainTests.cs Assets/Scripts/Vehicle/Core/*.cs && mono DrivetrainTests.exe`
 * All C# scripts were compile-checked against a stand-in of the Unity API. **They have not yet been compiled by a real Unity editor or
   run on a device.** The first GitHub Actions run is the real compile. If it fails, send me the log and I'll fix it.
@@ -86,9 +96,19 @@ Assets/Editor/BuildScript.cs   ← creates scene/materials/player settings and b
 A tractor is just a `TractorSpec` (power, torque curve, gear speeds, mass, wheel sizes, brakes, steering, traction).
 Adding the other models in Stage 6 means adding new specs plus a model variant.
 
-## 5. Next stages
+## 5. New in Stage 2: code map additions
 
-* **Stage 2:** trolley with hitch articulation, load mass and tipping, using `VehiclePhysics.ExtraRollingForce` and a second rigidbody on a joint.
-* **Stage 3:** implements (rotavator, cultivator, plough) that deform and mark soil.
-* **Stage 4:** village map and Track 1 with checkpoints, timer, rewards and failure conditions.
-* **Stages 5–8:** the other tracks, garage and progression, weather, traffic, and optimisation.
+```
+Assets/Scripts
+  Attachments/  Implement (+ImplementFactory), Trolley, AttachmentManager, FieldArea (+Career money)
+  Missions/     CargoMission (+Zone triggers, checkpoints)
+  Terrain/      MountainBuilder (Unity Terrain + ghat road), WorldProps, TerrainSurface
+  Core/         ArtCatalog (real-art slots)
+Assets/Editor/PostFxSetup.cs   ← camera rig with post-processing (ACES, grading, bloom, FXAA)
+```
+
+## 6. Next stages
+
+* **Stage 3:** traffic (bikes, autos, buses, trucks) and walking animals, plus weather: monsoon rain, mud forming, thunderstorms and a day/night cycle.
+* **Stage 4:** the remaining challenge tracks (desert, off-road, river crossing, the extreme Himalayan route) and a career with buying tractors and upgrades.
+* **Stage 5:** a garage with paint and upgrades, threshers/reapers/balers, loading by front loader, more maps, and optimisation for phones.

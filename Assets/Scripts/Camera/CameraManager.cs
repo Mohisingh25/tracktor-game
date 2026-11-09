@@ -28,6 +28,7 @@ namespace TractorSim
         {
             target = t;
             vis = t.GetComponent<TractorVisuals>();
+            if (vis != null && vis.driver != null) vis.driver.gameObject.SetActive(Mode != CamMode.Cockpit);
             orbitYaw = 0f;
         }
 
@@ -40,6 +41,7 @@ namespace TractorSim
             Cam.nearClipPlane = m == CamMode.Cockpit ? 0.05f : 0.2f;
             Cam.fieldOfView = m == CamMode.Cockpit ? 68f : 58f;
             if (m == CamMode.Cinematic) { cineTimer = 0f; cineShot = -1; }
+            if (vis != null && vis.driver != null) vis.driver.gameObject.SetActive(m != CamMode.Cockpit);
         }
 
         public void Next()
@@ -69,8 +71,9 @@ namespace TractorSim
             {
                 case CamMode.Menu:
                     orbitYaw += dt * 9f;
-                    pos = t.position + Quaternion.Euler(18f, orbitYaw + 140f, 0f) * new Vector3(0, 0, -7.5f) + Vector3.up * 1.0f;
-                    rot = Quaternion.LookRotation(t.position + Vector3.up * 1.1f - pos);
+                    float sz = target.Spec.bodyScale;
+                    pos = t.position + Quaternion.Euler(16f, orbitYaw + 140f, 0f) * new Vector3(0, 0, -7.2f * sz) + Vector3.up * 1.0f * sz;
+                    rot = Quaternion.LookRotation(t.position + Vector3.up * 1.2f * sz - pos);
                     break;
 
                 case CamMode.Cockpit:
@@ -81,7 +84,7 @@ namespace TractorSim
                     break;
 
                 case CamMode.Side:
-                    pos = t.TransformPoint(new Vector3(4.2f, 1.6f, 0.2f));
+                    pos = t.TransformPoint(new Vector3(4.2f * target.Spec.bodyScale, 1.6f * target.Spec.bodyScale, 0.2f));
                     rot = Quaternion.LookRotation(t.TransformPoint(new Vector3(0, 1.0f, 0.2f)) - pos, Vector3.up) * Quaternion.Euler(lookPitch, lookYaw, 0);
                     break;
 
@@ -116,8 +119,10 @@ namespace TractorSim
                     if (dragIdle > 3f) orbitYaw = Mathf.LerpAngle(orbitYaw, speed < -0.5f ? 180f : 0f, dt * 1.2f);
                     if (dragIdle > 3f) orbitPitch = Mathf.Lerp(orbitPitch, 14f, dt);
                     float yaw = t.eulerAngles.y + orbitYaw;
-                    Vector3 pivot = t.position + Vector3.up * 1.4f;
-                    Vector3 desired = pivot + Quaternion.Euler(orbitPitch, yaw, 0f) * new Vector3(0, 0, -chaseDist);
+                    float size = target.Spec.bodyScale;
+                    float extra = target.GetComponent<AttachmentManager>() != null ? target.GetComponent<AttachmentManager>().ChaseExtraDistance : 0f;
+                    Vector3 pivot = t.position + Vector3.up * 1.4f * size;
+                    Vector3 desired = pivot + Quaternion.Euler(orbitPitch, yaw, 0f) * new Vector3(0, 0, -(chaseDist * size + extra));
                     // keep the camera out of the ground / walls
                     RaycastHit h;
                     Vector3 dir = desired - pivot;

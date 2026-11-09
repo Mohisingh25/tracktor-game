@@ -27,6 +27,8 @@ namespace TractorSim
         }
 
         public int ForwardCount { get { return ForwardRatios.Length; } }
+        public int RangeCount { get { return Spec.RangeCount; } }
+        public string RangeName(int r) { return Spec.rangeNames != null && r < Spec.rangeNames.Length ? Spec.rangeNames[r] : ((char)('A' + r)).ToString(); }
         public bool InNeutral { get { return Gear == 0; } }
         public bool InReverse { get { return Gear < 0; } }
 
@@ -36,7 +38,7 @@ namespace TractorSim
             get
             {
                 if (Gear == 0) return 0f;
-                if (Gear < 0) return -ReverseRatios[Range < ReverseRatios.Length ? Range : 0];
+                if (Gear < 0) return -ReverseRatios[Range < ReverseRatios.Length ? Range : ReverseRatios.Length - 1];
                 return ForwardRatios[FlatIndex];
             }
         }
@@ -49,7 +51,7 @@ namespace TractorSim
             get
             {
                 if (Gear == 0) return "N";
-                string r = Range == 0 ? "L" : "H";
+                string r = RangeName(Range);
                 if (Gear < 0) return "R" + r;
                 return r + Gear;
             }
@@ -71,10 +73,10 @@ namespace TractorSim
 
         public bool TrySetRange(int range, bool clutchFree, float speedKmh)
         {
-            range = range <= 0 ? 0 : 1;
+            range = range < 0 ? 0 : (range >= RangeCount ? RangeCount - 1 : range);
             if (range == Range) return true;
             if (!clutchFree) { Event = "Range lever blocked – press the clutch!"; JustGround = true; return false; }
-            if (Num.Abs(speedKmh) > 2.5f) { Event = "Stop the tractor to change range"; JustGround = true; return false; }
+            if (!Spec.rangeShiftOnTheMove && Num.Abs(speedKmh) > 2.5f) { Event = "Stop the tractor to change range"; JustGround = true; return false; }
             Range = range;
             return true;
         }
@@ -89,7 +91,7 @@ namespace TractorSim
             Range = flatIndex / Spec.gearsPerRange;
             Gear = flatIndex % Spec.gearsPerRange + 1;
         }
-        public void ForceReverse(int range) { Gear = -1; Range = range <= 0 ? 0 : 1; }
+        public void ForceReverse(int range) { Gear = -1; Range = range < 0 ? 0 : (range >= ReverseRatios.Length ? ReverseRatios.Length - 1 : range); }
         public void ForceNeutral() { Gear = 0; }
     }
 }

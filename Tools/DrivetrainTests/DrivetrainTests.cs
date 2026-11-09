@@ -14,11 +14,12 @@ class Sim
     public double t;
     const float dt = 0.01f;
 
-    public Sim(TransmissionMode mode)
+    public Sim(TransmissionMode mode, string specId = "haldhar47")
     {
-        d = new Drivetrain(TractorSpec.Default());
+        d = new Drivetrain(TractorCatalog.Get(specId));
         d.SetMode(mode);
     }
+    readonly WheelContact[] cs = new WheelContact[4];
 
     public void Run(double seconds, Action<Sim> each = null)
     {
@@ -34,11 +35,20 @@ class Sim
             each?.Invoke(this);
             d.BrakeInput = brake;
             float speedKmh = (float)(v * 3.6);
-            double Fz = s.massKg * g * Math.Cos(slope) * 0.62 + extraMass * g * 0.15; // rear axle load (+hitch load)
-            var c = new WheelContact { grounded = true, Fz = (float)(Fz / 2), vLong = (float)v, mu = (float)mu, longCapacity = 1f, brakeTorque = brake * s.brakeTorquePerRearWheel };
-            d.Step(dt, c, c, speedKmh);
+            double Ftot = s.massKg * g * Math.Cos(slope);
+            double FzR = Ftot * 0.6 + extraMass * g * 0.15, FzF = Ftot * 0.4;
+            for (int k = 0; k < 4; k++)
+            {
+                bool rear = k < 2;
+                cs[k] = new WheelContact { grounded = true, Fz = (float)((rear ? FzR : FzF) / 2), vLong = (float)v, mu = (float)mu, longCapacity = 1f,
+                    brakeTorque = brake * (rear ? s.brakeTorquePerRearWheel : s.brakeTorquePerFrontWheel) };
+            }
+            d.Step(dt, cs, speedKmh);
             wheelW = d.RearOmegaAvg;
-            double Fx = d.AxleForce[0] + d.AxleForce[1];
+            double Fx = 0; for (int k = 0; k < d.DrivenCount; k++) Fx += d.WheelForce[k];
+            if (!s.fourWheelDrive && s.frontBrakes && brake > 0 && Math.Abs(v) > 0.05)
+                Fx -= Math.Sign(v) * Math.Min(2 * brake * s.brakeTorquePerFrontWheel / s.frontWheelRadius, mu * FzF);
+            Fx -= 0.5 * 1.2 * s.dragArea * v * Math.Abs(v);
             double Froll = crr * m * g * Math.Cos(slope) * Math.Sign(v);
             if (Math.Abs(v) < 0.05) Froll = 0;
             double Fgrade = m * g * Math.Sin(slope);
@@ -61,9 +71,9 @@ static class Program
     static int fails;
     static void Check(bool ok, string what) { Console.WriteLine((ok ? "  PASS " : "  FAIL ") + what); if (!ok) fails++; }
 
-    static Sim StartedSim(TransmissionMode m)
+    static Sim StartedSim(TransmissionMode m, string id = "haldhar47")
     {
-        var s = new Sim(m);
+        var s = new Sim(m, id);
         s.d.ClutchPedal = 1f;
         s.d.TryStartEngine();
         s.Run(3);
@@ -201,6 +211,37 @@ static class Program
         s.slopeDeg = 6; s.extraMass = 3000; s.d.ThrottleInput = 1f; s.Run(180);
         Console.WriteLine("  " + s.State());
         Check(s.d.Engine.TempC > 80 && s.d.Engine.TempC < 112, "coolant temp in working range");
+
+        Console.WriteLine("16. Every tractor in the showroom: automatic top speed on flat asphalt");
+        double prevTop = 0; double mohitTop = 0; var tops = new System.Collections.Generic.Dictionary<string, double>();
+        foreach (var id in TractorCatalog.Ids)
+        {
+            var t = StartedSim(TransmissionMode.Automatic, id);
+            t.crr = 0.016; t.d.ThrottleInput = 1f; t.Run(150);
+            double top = t.v * 3.6; tops[id] = top;
+            Console.WriteLine("  " + t.d.Spec.displayName.PadRight(26) + " " + t.d.Spec.ratedPowerHp + " HP  top " + top.ToString("F1") + " km/h (spec " + t.d.Spec.TopSpeedKmh + ")  gear " + t.d.Gearbox.Label + "  rpm " + t.d.Engine.Rpm.ToString("F0"));
+            Check(t.d.Engine.Running && top > t.d.Spec.TopSpeedKmh * 0.88, id + " reaches ~its rated top speed");
+            if (id == "mohit150") mohitTop = top;
+        }
+        Check(mohitTop > 110, "Mohit Singh does 110+ km/h (" + mohitTop.ToString("F0") + ")");
+        bool fastest = true; foreach (var kv in tops) if (kv.Key != "mohit150" && kv.Value >= mohitTop) fastest = false;
+        Check(fastest, "Mohit Singh is the fastest tractor");
+
+        Console.WriteLine("17. Mohit Singh: 0-100 km/h and braking from 120");
+        var m = StartedSim(TransmissionMode.Automatic, "mohit150");
+        m.crr = 0.016; m.d.ThrottleInput = 1f; double t100 = -1; double t0 = m.t;
+        m.Run(120, x => { if (t100 < 0 && x.v * 3.6 >= 100) t100 = x.t - t0; });
+        Console.WriteLine("  0-100 in " + t100.ToString("F1") + " s, now " + (m.v * 3.6).ToString("F0") + " km/h");
+        double bd = 0; m.d.ThrottleInput = 0; m.brake = 1f; m.Run(15, x => bd += Math.Max(0, x.v) * 0.01);
+        Console.WriteLine("  stopped in " + bd.ToString("F0") + " m");
+        Check(t100 > 0 && t100 < 60, "reaches 100 km/h");
+        Check(bd > 40 && bd < 140 && m.v < 0.2, "stops from top speed in a plausible distance");
+
+        Console.WriteLine("18. 4WD vs 2WD: muddy 6 deg slope with a 2 t trolley");
+        var two = StartedSim(TransmissionMode.Automatic, "anshu50"); two.mu = 0.36; two.crr = 0.08; two.slopeDeg = 6; two.extraMass = 2000; two.d.ThrottleInput = 1f; two.Run(25);
+        var four = StartedSim(TransmissionMode.Automatic, "bharatveer60"); four.mu = 0.36; four.crr = 0.08; four.slopeDeg = 6; four.extraMass = 2000; four.d.ThrottleInput = 1f; four.Run(25);
+        Console.WriteLine("  2WD Anshu Singh: " + (two.v * 3.6).ToString("F1") + " km/h   4WD Bharat Veer: " + (four.v * 3.6).ToString("F1") + " km/h");
+        Check(four.v > two.v + 0.3, "4WD climbs the muddy slope better");
 
         Console.WriteLine(fails == 0 ? "\nALL PASS" : "\nFAILURES: " + fails);
     }

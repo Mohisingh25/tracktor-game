@@ -30,7 +30,7 @@ namespace TractorSim
         public float tiltCalibration;          // device x-acceleration treated as centre
 
         // ---- one-shot button events (consumed by the tractor / game) ----
-        bool evGearUp, evGearDown, evRange, evDirection, evIgnition, evLights, evIndL, evIndR, evHazard, evHandbrake, evDiff, evCamera, evPause, evReset;
+        bool evAttach, evLift, evPto, evTip, evLoad, evGearUp, evGearDown, evRange, evDirection, evIgnition, evLights, evIndL, evIndR, evHazard, evHandbrake, evDiff, evCamera, evPause, evReset;
 
         float kbSteer, kbThrottle, kbBrake, kbClutch;
         float arrowSteer;
@@ -59,6 +59,11 @@ namespace TractorSim
                 case "camera": evCamera = true; break;
                 case "pause": evPause = true; break;
                 case "reset": evReset = true; break;
+                case "attach": evAttach = true; break;
+                case "lift": evLift = true; break;
+                case "pto": evPto = true; break;
+                case "tip": evTip = true; break;
+                case "load": evLoad = true; break;
             }
         }
 
@@ -77,9 +82,15 @@ namespace TractorSim
         public bool CameraNext() { return Take(ref evCamera); }
         public bool PausePressed() { return Take(ref evPause); }
         public bool ResetPressed() { return Take(ref evReset); }
+        public bool AttachPressed() { return Take(ref evAttach); }
+        public bool LiftPressed() { return Take(ref evLift); }
+        public bool PtoPressed() { return Take(ref evPto); }
+        public bool TipPressed() { return Take(ref evTip); }
+        public bool LoadPressed() { return Take(ref evLoad); }
 
         public void ClearAll()
         {
+            evAttach = evLift = evPto = evTip = evLoad = false;
             evGearUp = evGearDown = evRange = evDirection = evIgnition = evLights = evIndL = evIndR = evHazard = evHandbrake = evDiff = evCamera = evPause = evReset = false;
             touchThrottle = touchBrake = touchClutch = 0f;
             touchLeft = touchRight = false; horn = false;
@@ -146,6 +157,11 @@ namespace TractorSim
             if (Input.GetKeyDown(KeyCode.F)) evDiff = true;
             if (Input.GetKeyDown(KeyCode.C)) evCamera = true;
             if (Input.GetKeyDown(KeyCode.Escape)) evPause = true;
+            if (Input.GetKeyDown(KeyCode.G)) evAttach = true;
+            if (Input.GetKeyDown(KeyCode.V)) evLift = true;
+            if (Input.GetKeyDown(KeyCode.P)) evPto = true;
+            if (Input.GetKeyDown(KeyCode.B)) evTip = true;
+            if (Input.GetKeyDown(KeyCode.N)) evLoad = true;
             if (Input.GetKey(KeyCode.H)) horn = true;
             else if (Input.GetKeyUp(KeyCode.H)) horn = false;
             if (Input.GetKey(KeyCode.Equals) || Input.GetKey(KeyCode.KeypadPlus)) HandThrottle = Mathf.Clamp01(HandThrottle + dt * 0.5f);

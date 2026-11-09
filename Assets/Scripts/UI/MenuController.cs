@@ -10,16 +10,22 @@ namespace TractorSim
         RectTransform main, pause, settingsPanel, guide;
         System.Action<bool> settingsBack;
         public System.Action onPlay, onResume, onRestart, onMainMenu, onRecover, onService, onQuit, onSettingsChanged;
+        public System.Action<string> onShowroomPick;
+        public System.Action onShowroomConfirm, onShowroomBack, onMapBack;
+        public System.Action<int> onMapChosen;
+        RectTransform showroom, mapSelect;
         Text statsText;
         GameSettings s;
 
-        public void Build(TractorSpec spec)
+        public void Build()
         {
             s = SaveSystem.Settings;
             canvas = UIFactory.CreateCanvas("Menus", 20);
             canvas.transform.SetParent(transform, false);
             var root = canvas.transform;
-            BuildMain(root, spec);
+            BuildMain(root);
+            BuildShowroom(root);
+            BuildMapSelect(root);
             BuildPause(root);
             BuildSettings(root);
             BuildGuide(root);
@@ -33,36 +39,115 @@ namespace TractorSim
             return p;
         }
 
-        void BuildMain(Transform root, TractorSpec spec)
+        void BuildMain(Transform root)
         {
             main = UIFactory.Stretch(root, "MainMenu");
-            // left gradient strip
             var strip = UIFactory.Rect(main, "Strip", new Vector2(0f, 0.5f), new Vector2(0, 0), new Vector2(820f, 1080f), new Vector2(0f, 0.5f));
             UIFactory.Img(strip, new Color(0.03f, 0.03f, 0.04f, 0.72f));
             UIFactory.Label(main, "INDIAN TRACTOR", 76, new Vector2(0f, 1f), new Vector2(410f, -130f), new Vector2(760f, 90f), TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
             UIFactory.Label(main, "SIMULATOR 3D", 76, new Vector2(0f, 1f), new Vector2(410f, -215f), new Vector2(760f, 90f), TextAnchor.MiddleLeft, UIFactory.Accent, FontStyle.Bold);
-            UIFactory.Label(main, "Stage 1  ·  Proving Ground", 30, new Vector2(0f, 1f), new Vector2(410f, -285f), new Vector2(760f, 40f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.7f));
-
+            UIFactory.Label(main, "5 tractors · implements & trolleys · Himalayan cargo route", 26, new Vector2(0f, 1f), new Vector2(410f, -285f), new Vector2(760f, 40f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.7f));
             var a = new Vector2(0f, 1f);
-            UIFactory.MenuButton(main, "TEST DRIVE", a, new Vector2(270f, -400f), new Vector2(460f, 100f), () => { if (onPlay != null) onPlay(); }, new Color(0.75f, 0.42f, 0.05f, 0.95f), 44);
+            UIFactory.MenuButton(main, "PLAY", a, new Vector2(270f, -400f), new Vector2(460f, 100f), () => { if (onPlay != null) onPlay(); }, new Color(0.75f, 0.42f, 0.05f, 0.95f), 46);
             UIFactory.MenuButton(main, "SETTINGS", a, new Vector2(270f, -520f), new Vector2(460f, 90f), () => ShowSettings(false));
             UIFactory.MenuButton(main, "HOW TO DRIVE", a, new Vector2(270f, -630f), new Vector2(460f, 90f), () => ShowGuide());
             UIFactory.MenuButton(main, "QUIT", a, new Vector2(270f, -740f), new Vector2(460f, 90f), () => { if (onQuit != null) onQuit(); });
-
-            // spec card – real numbers from the tractor in the game
-            var card = Panel(main, "SpecCard", new Vector2(520f, 420f), new Vector2(1f, 0f), new Vector2(-290f, 250f));
-            UIFactory.Label(card, spec.displayName, 40, new Vector2(0.5f, 1f), new Vector2(0, -45f), new Vector2(480f, 50f), TextAnchor.MiddleLeft, UIFactory.Accent, FontStyle.Bold);
-            UIFactory.Label(card,
-                "Engine      " + spec.ratedPowerHp + " HP · " + spec.cylinders + "-cyl diesel\n" +
-                "Max torque  " + Mathf.RoundToInt(Max(spec.torqueNm)) + " Nm\n" +
-                "Gearbox     8F + 2R (L/H range)\n" +
-                "Top speed   " + spec.forwardSpeedsKmh[spec.forwardSpeedsKmh.Length - 1].ToString("0.0") + " km/h\n" +
-                "Weight      " + spec.massKg + " kg\n" +
-                "Fuel tank   " + spec.fuelTankL + " L\n" +
-                "Drive       2WD (rear), diff lock",
-                24, new Vector2(0.5f, 1f), new Vector2(0, -215f), new Vector2(480f, 280f), TextAnchor.UpperLeft, new Color(1, 1, 1, 0.9f));
-            statsText = UIFactory.Label(card, "", 20, new Vector2(0.5f, 0f), new Vector2(0, 30f), new Vector2(480f, 30f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.6f));
+            statsText = UIFactory.Label(main, "", 26, new Vector2(0f, 0f), new Vector2(410f, 60f), new Vector2(760f, 40f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.75f));
         }
+
+        // ---------------- showroom (tractor selection) ----------------
+        int showIdx;
+        Text srBrand, srModel, srTag, srDesc, srStars, srBadge;
+        Image[] srBars; Text[] srBarVals;
+        static readonly string[] BarNames = { "POWER", "TORQUE", "TOP SPEED", "WEIGHT", "GEARS", "LIFT / TOW" };
+
+        void BuildShowroom(Transform root)
+        {
+            showroom = UIFactory.Stretch(root, "Showroom");
+            var left = UIFactory.Rect(showroom, "Card", new Vector2(0f, 0.5f), new Vector2(40f, 0f), new Vector2(760f, 960f), new Vector2(0f, 0.5f));
+            UIFactory.Img(left, UIFactory.PanelColor, ProcTex.RoundRect());
+            UIFactory.Label(left, "CHOOSE YOUR TRACTOR", 26, new Vector2(0.5f, 1f), new Vector2(0, -36f), new Vector2(700f, 34f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.6f));
+            srBadge = UIFactory.Label(left, "★ BEST TRACTOR IN THE GAME ★", 26, new Vector2(0.5f, 1f), new Vector2(0, -74f), new Vector2(700f, 34f), TextAnchor.MiddleLeft, new Color(1f, 0.8f, 0.2f), FontStyle.Bold);
+            srBrand = UIFactory.Label(left, "", 68, new Vector2(0.5f, 1f), new Vector2(0, -140f), new Vector2(700f, 84f), TextAnchor.MiddleLeft, UIFactory.Accent, FontStyle.Bold);
+            srModel = UIFactory.Label(left, "", 38, new Vector2(0.5f, 1f), new Vector2(0, -205f), new Vector2(700f, 48f), TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
+            srTag = UIFactory.Label(left, "", 26, new Vector2(0.5f, 1f), new Vector2(0, -248f), new Vector2(700f, 36f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.75f), FontStyle.Normal);
+            srStars = UIFactory.Label(left, "", 34, new Vector2(0.5f, 1f), new Vector2(0, -292f), new Vector2(700f, 40f), TextAnchor.MiddleLeft, new Color(1f, 0.8f, 0.2f));
+            srBars = new Image[BarNames.Length]; srBarVals = new Text[BarNames.Length];
+            for (int i = 0; i < BarNames.Length; i++)
+            {
+                float y = -360f - i * 62f;
+                UIFactory.Label(left, BarNames[i], 22, new Vector2(0f, 1f), new Vector2(120f, y), new Vector2(200f, 30f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.75f));
+                var bg = UIFactory.Rect(left, "BarBg", new Vector2(0f, 1f), new Vector2(235f, y), new Vector2(300f, 18f), new Vector2(0f, 0.5f));
+                UIFactory.Img(bg, new Color(1, 1, 1, 0.12f));
+                var fill = UIFactory.Rect(bg, "Fill", new Vector2(0f, 0.5f), Vector2.zero, new Vector2(300f, 18f), new Vector2(0f, 0.5f));
+                srBars[i] = UIFactory.Img(fill, UIFactory.Accent, ProcTex.RoundRect());
+                srBars[i].type = Image.Type.Filled; srBars[i].fillMethod = Image.FillMethod.Horizontal;
+                srBarVals[i] = UIFactory.Label(left, "", 22, new Vector2(0f, 1f), new Vector2(640f, y), new Vector2(200f, 30f), TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
+            }
+            srDesc = UIFactory.Label(left, "", 22, new Vector2(0.5f, 0f), new Vector2(0, 170f), new Vector2(690f, 90f), TextAnchor.UpperLeft, new Color(1, 1, 1, 0.85f));
+            UIFactory.MenuButton(left, "◄", new Vector2(0f, 0f), new Vector2(90f, 70f), new Vector2(120f, 84f), () => Cycle(-1), null, 44);
+            UIFactory.MenuButton(left, "►", new Vector2(0f, 0f), new Vector2(230f, 70f), new Vector2(120f, 84f), () => Cycle(1), null, 44);
+            UIFactory.MenuButton(left, "SELECT", new Vector2(1f, 0f), new Vector2(-190f, 70f), new Vector2(300f, 84f), () => { if (onShowroomConfirm != null) onShowroomConfirm(); }, new Color(0.75f, 0.42f, 0.05f, 0.95f), 40);
+            UIFactory.MenuButton(showroom, "BACK", new Vector2(1f, 1f), new Vector2(-130f, -70f), new Vector2(200f, 80f), () => { if (onShowroomBack != null) onShowroomBack(); }, null, 32);
+        }
+
+        void Cycle(int d)
+        {
+            var ids = TractorCatalog.Ids;
+            showIdx = (showIdx + d + ids.Length) % ids.Length;
+            if (onShowroomPick != null) onShowroomPick(ids[showIdx]);
+            FillShowroom(TractorCatalog.Get(ids[showIdx]));
+        }
+
+        void FillShowroom(TractorSpec sp)
+        {
+            srBrand.text = sp.brand;
+            srBrand.color = new Color(sp.accentRgb[0], sp.accentRgb[1], sp.accentRgb[2]);
+            if (sp.accentRgb[0] > 0.85f && sp.accentRgb[1] > 0.85f && sp.accentRgb[2] > 0.85f) srBrand.color = new Color(sp.bodyRgb[0] * 0.5f + 0.5f, sp.bodyRgb[1] * 0.5f + 0.5f, sp.bodyRgb[2] * 0.5f + 0.5f);
+            srModel.text = sp.model + (sp.fourWheelDrive ? "  ·  4WD" : "  ·  2WD") + (sp.style == BodyStyle.Cabin ? "  ·  Cab" : "");
+            srTag.text = "\u201C" + sp.tagline + "\u201D";
+            srStars.text = new string('★', sp.stars) + new string('☆', 5 - sp.stars);
+            srBadge.enabled = sp.flagship;
+            srDesc.text = sp.description;
+            float[] v = { sp.ratedPowerHp / 150f, sp.PeakTorqueNm / 650f, sp.TopSpeedKmh / 120f, sp.massKg / 4800f, sp.forwardSpeedsKmh.Length / 16f, sp.maxTowKg / 24000f };
+            string[] t = { sp.ratedPowerHp + " HP", Mathf.RoundToInt(sp.PeakTorqueNm) + " Nm", sp.TopSpeedKmh + " km/h", sp.massKg + " kg",
+                           sp.forwardSpeedsKmh.Length + "F + " + sp.reverseSpeedsKmh.Length + "R", Mathf.RoundToInt(sp.maxLiftKg) + " / " + Mathf.RoundToInt(sp.maxTowKg / 1000f) + " t" };
+            for (int i = 0; i < srBars.Length; i++) { srBars[i].fillAmount = Mathf.Clamp01(v[i]); srBarVals[i].text = t[i]; srBars[i].color = sp.flagship ? new Color(1f, 0.75f, 0.2f) : UIFactory.Accent; }
+        }
+
+        public void ShowShowroom(string currentId)
+        {
+            HideAll();
+            showroom.gameObject.SetActive(true);
+            showIdx = System.Array.IndexOf(TractorCatalog.Ids, currentId);
+            if (showIdx < 0) showIdx = 0;
+            FillShowroom(TractorCatalog.Get(TractorCatalog.Ids[showIdx]));
+        }
+
+        // ---------------- map select ----------------
+        void BuildMapSelect(Transform root)
+        {
+            mapSelect = UIFactory.Stretch(root, "MapSelect");
+            UIFactory.Img(mapSelect, new Color(0, 0, 0, 0.45f), null, true);
+            UIFactory.Label(mapSelect, "WHERE TO?", 56, new Vector2(0.5f, 1f), new Vector2(0, -110f), new Vector2(900f, 70f), TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+            string[] titles = { "VILLAGE FARM", "HIMALAYAN CARGO ROUTE" };
+            string[] desc = {
+                "Proving ground, village and farm.\nHitch rotavator, cultivator, plough, seed drill or sprayer from the implement yard and work the field (paid per m²).\nCargo job: sugarcane to the mill.",
+                "3 km ghat road with hairpins, cliff drops, mud, rocks and a river ford.\nHitch a trolley at the depot, load 4.5 t of apples and deliver them up the mountain to Pahadgaon.\nHeavy, steep and dangerous – low gears!" };
+            Color[] cols = { new Color(0.25f, 0.45f, 0.18f, 0.95f), new Color(0.25f, 0.33f, 0.5f, 0.95f) };
+            for (int i = 0; i < 2; i++)
+            {
+                int map = i;
+                var card = UIFactory.Rect(mapSelect, "Map" + i, new Vector2(0.5f, 0.5f), new Vector2(i == 0 ? -400f : 400f, -20f), new Vector2(720f, 600f));
+                UIFactory.Img(card, cols[i], ProcTex.RoundRect(), true);
+                UIFactory.Label(card, titles[i], 42, new Vector2(0.5f, 1f), new Vector2(0, -60f), new Vector2(660f, 60f), TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+                UIFactory.Label(card, desc[i], 26, new Vector2(0.5f, 0.5f), new Vector2(0, 10f), new Vector2(640f, 320f), TextAnchor.UpperCenter, new Color(1, 1, 1, 0.92f));
+                UIFactory.MenuButton(card, "DRIVE", new Vector2(0.5f, 0f), new Vector2(0, 70f), new Vector2(320f, 90f), () => { if (onMapChosen != null) onMapChosen(map); }, new Color(0.75f, 0.42f, 0.05f, 0.95f), 40);
+            }
+            UIFactory.MenuButton(mapSelect, "BACK", new Vector2(1f, 1f), new Vector2(-130f, -70f), new Vector2(200f, 80f), () => { if (onMapBack != null) onMapBack(); }, null, 32);
+        }
+
+        public void ShowMapSelect(int current) { HideAll(); mapSelect.gameObject.SetActive(true); }
 
         static float Max(float[] a) { float m = 0; foreach (var v in a) m = Mathf.Max(m, v); return m; }
 
@@ -75,9 +160,9 @@ namespace TractorSim
             var a = new Vector2(0.5f, 1f);
             Vector2 bs = new Vector2(480f, 84f);
             UIFactory.MenuButton(p, "RESUME", a, new Vector2(0, -170f), bs, () => { if (onResume != null) onResume(); }, new Color(0.75f, 0.42f, 0.05f, 0.95f));
-            UIFactory.MenuButton(p, "RESTART", a, new Vector2(0, -270f), bs, () => { if (onRestart != null) onRestart(); });
-            UIFactory.MenuButton(p, "RECOVER TRACTOR", a, new Vector2(0, -370f), bs, () => { if (onRecover != null) onRecover(); }, null, 34);
-            UIFactory.MenuButton(p, "REFUEL & REPAIR", a, new Vector2(0, -470f), bs, () => { if (onService != null) onService(); }, null, 34);
+            UIFactory.MenuButton(p, "RESTART MAP", a, new Vector2(0, -270f), bs, () => { if (onRestart != null) onRestart(); });
+            UIFactory.MenuButton(p, "RECOVER TRACTOR (₹500)", a, new Vector2(0, -370f), bs, () => { if (onRecover != null) onRecover(); }, null, 30);
+            UIFactory.MenuButton(p, "REFUEL & REPAIR (₹)", a, new Vector2(0, -470f), bs, () => { if (onService != null) onService(); }, null, 32);
             UIFactory.MenuButton(p, "SETTINGS", a, new Vector2(0, -570f), bs, () => ShowSettings(true));
             UIFactory.MenuButton(p, "MAIN MENU", a, new Vector2(0, -670f), bs, () => { if (onMainMenu != null) onMainMenu(); });
         }
@@ -143,8 +228,10 @@ namespace TractorSim
                 "TERRAIN TIPS\n" +
                 "Mud & sand: low range, steady throttle, DIFF LOCK to stop one wheel spinning. Hills: pick a low gear before the climb.\n" +
                 "Stuck or rolled over? Use RECOVER.   Drag on empty screen to look around.   CAMERA cycles six views.\n\n" +
-                "Keyboard (editor): W/S accel/brake · A/D steer · Shift clutch · E/Q gear · R range · T F/R · I ignition · Space P-brake · F diff · L lights · H horn · C camera",
-                25, new Vector2(0.5f, 1f), new Vector2(0, -470f), new Vector2(1400f, 720f), TextAnchor.UpperLeft, new Color(1, 1, 1, 0.92f));
+                "IMPLEMENTS & TROLLEYS\n" +
+                "Reverse until your hitch is right at the implement – the ATTACH button lights green. LOWER drops it into the soil, PTO spins rotavators/sprayers. Trolleys: LOAD in the yellow bay, TIP to unload.\n\n" +
+                "Keyboard (editor): G attach · V lift · P PTO · B tip · N load · W/S accel/brake · A/D steer · Shift clutch · E/Q gear · R range · T F/R · I ignition · Space P-brake · F diff · L lights · H horn · C camera",
+                22, new Vector2(0.5f, 1f), new Vector2(0, -470f), new Vector2(1400f, 720f), TextAnchor.UpperLeft, new Color(1, 1, 1, 0.92f));
             UIFactory.MenuButton(p, "GOT IT", new Vector2(0.5f, 0f), new Vector2(0, 70f), new Vector2(420f, 84f), () => guide.gameObject.SetActive(false), new Color(0.75f, 0.42f, 0.05f, 0.95f));
         }
 
@@ -155,6 +242,8 @@ namespace TractorSim
             pause.gameObject.SetActive(false);
             settingsPanel.gameObject.SetActive(false);
             guide.gameObject.SetActive(false);
+            if (showroom != null) showroom.gameObject.SetActive(false);
+            if (mapSelect != null) mapSelect.gameObject.SetActive(false);
         }
 
         public void ShowMain()
@@ -162,7 +251,7 @@ namespace TractorSim
             HideAll();
             main.gameObject.SetActive(true);
             var d = SaveSystem.Data;
-            statsText.text = "Driven so far: " + d.odometerKm.ToString("0.0") + " km  ·  sessions: " + d.sessions;
+            statsText.text = "₹ " + d.money.ToString("N0") + "   ·   " + d.odometerKm.ToString("0.0") + " km driven   ·   " + d.deliveries + " deliveries";
         }
 
         public void ShowPause() { HideAll(); pause.gameObject.SetActive(true); }

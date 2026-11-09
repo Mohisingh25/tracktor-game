@@ -26,9 +26,29 @@ namespace TractorSim
         float toastTimer;
         public System.Action onPause, onCamera, onRecover;
 
-        public void Build(TractorController t, GameSettings s)
+        AttachmentManager hitch;
+        CargoMission mission;
+        TouchButton btnAttach, btnLift, btnPto, btnTip, btnLoad;
+        RectTransform missionPanel, navArrow;
+        Text missionTitle, missionText, navText, moneyText;
+
+        /// <summary>Connect the HUD to a (new) tractor.</summary>
+        public void Bind(TractorController t)
         {
-            tractor = t; settings = s; inp = MobileInputManager.I;
+            tractor = t;
+            hitch = t.GetComponent<AttachmentManager>();
+            t.OnMessage += Toast;
+        }
+
+        public void SetMission(CargoMission m)
+        {
+            mission = m;
+            if (missionPanel != null) missionPanel.gameObject.SetActive(m != null);
+        }
+
+        public void Build(GameSettings s)
+        {
+            settings = s; inp = MobileInputManager.I;
             Canvas = UIFactory.CreateCanvas("HUD", 10);
             Canvas.transform.SetParent(transform, false);
             var root = Canvas.transform;
@@ -48,8 +68,20 @@ namespace TractorSim
             toastText = UIFactory.Label(root, "", 34, new Vector2(0.5f, 1f), new Vector2(0, -360f), new Vector2(1100f, 60f), TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
             var sh = toastText.gameObject.AddComponent<Shadow>(); sh.effectDistance = new Vector2(2, -2);
 
-            t.OnMessage += Toast;
+            BuildMission(root);
             ApplySettings(s);
+        }
+
+        void BuildMission(Transform root)
+        {
+            missionPanel = UIFactory.Rect(root, "Mission", new Vector2(0f, 1f), new Vector2(20f, -135f), new Vector2(520f, 190f), new Vector2(0f, 1f));
+            UIFactory.Img(missionPanel, UIFactory.PanelColor, ProcTex.RoundRect());
+            missionTitle = UIFactory.Label(missionPanel, "", 24, new Vector2(0f, 1f), new Vector2(260f, -24f), new Vector2(490f, 32f), TextAnchor.MiddleLeft, UIFactory.Accent, FontStyle.Bold);
+            missionText = UIFactory.Label(missionPanel, "", 21, new Vector2(0f, 1f), new Vector2(260f, -98f), new Vector2(490f, 110f), TextAnchor.UpperLeft, Color.white);
+            navArrow = UIFactory.Rect(missionPanel, "NavArrow", new Vector2(1f, 0f), new Vector2(-48f, 40f), new Vector2(54f, 54f));
+            var img = UIFactory.Img(navArrow, UIFactory.Accent, ProcTex.Arrow());
+            navText = UIFactory.Label(missionPanel, "", 20, new Vector2(1f, 0f), new Vector2(-48f, 6f), new Vector2(110f, 26f), TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+            missionPanel.gameObject.SetActive(false);
         }
 
         // ------------------------------------------------------------------ build
@@ -76,7 +108,8 @@ namespace TractorSim
             UIFactory.Img(cap2, new Color(0.2f, 0.2f, 0.2f), ProcTex.Circle());
             UIFactory.Label(spd, "km/h", 18, new Vector2(0.5f, 0.5f), new Vector2(0, -50f), new Vector2(200, 30), TextAnchor.MiddleCenter, new Color(1, 1, 1, 0.6f));
             speedText = UIFactory.Label(spd, "0", 30, new Vector2(0.5f, 0.5f), new Vector2(0, -82f), new Vector2(200, 34), TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
-            for (int i = 0; i <= 8; i += 2) TickNumber(spd, (i * 5).ToString(), i / 8f, 88f);    // 0..40
+            speedTicks = new Text[5];
+            for (int i = 0; i <= 8; i += 2) speedTicks[i / 2] = TickNumber(spd, (i * 5).ToString(), i / 8f, 88f);    // relabelled per tractor
 
             // centre column: gear, mode, fuel, temp
             var mid = UIFactory.Rect(dashboard, "Centre", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(200f, 260f));
@@ -97,10 +130,23 @@ namespace TractorSim
             lampIndL = arr[0]; lampFuel = arr[1]; lampTemp = arr[2]; lampOil = arr[3]; lampPark = arr[4]; lampDiff = arr[5]; lampBeam = arr[6]; lampRange = arr[7]; lampIndR = arr[8];
         }
 
-        void TickNumber(RectTransform gauge, string txt, float t, float radius)
+        Text[] speedTicks; float lastSpeedoMax;
+        float SpeedoMax()
+        {
+            float top = tractor.Spec.TopSpeedKmh;
+            float max = top > 60f ? 140f : 40f;
+            if (max != lastSpeedoMax && speedTicks != null)
+            {
+                lastSpeedoMax = max;
+                for (int i = 0; i < speedTicks.Length; i++) speedTicks[i].text = Mathf.RoundToInt(max * i / 4f).ToString();
+            }
+            return max;
+        }
+
+        Text TickNumber(RectTransform gauge, string txt, float t, float radius)
         {
             float ang = Mathf.Lerp(-120f, 120f, t) * Mathf.Deg2Rad;
-            UIFactory.Label(gauge, txt, 20, new Vector2(0.5f, 0.5f), new Vector2(Mathf.Sin(ang) * radius, Mathf.Cos(ang) * radius), new Vector2(50, 26), TextAnchor.MiddleCenter, new Color(1, 1, 1, 0.85f));
+            return UIFactory.Label(gauge, txt, 20, new Vector2(0.5f, 0.5f), new Vector2(Mathf.Sin(ang) * radius, Mathf.Cos(ang) * radius), new Vector2(50, 26), TextAnchor.MiddleCenter, new Color(1, 1, 1, 0.85f));
         }
 
         Image Bar(RectTransform parent, string label, Vector2 pos, Color c, out Text valueText)
@@ -118,9 +164,10 @@ namespace TractorSim
 
         void BuildInfo(Transform root)
         {
-            infoPanel = UIFactory.Rect(root, "Info", new Vector2(1f, 1f), new Vector2(-20f, -20f), new Vector2(330f, 210f), new Vector2(1f, 1f));
+            infoPanel = UIFactory.Rect(root, "Info", new Vector2(1f, 1f), new Vector2(-20f, -20f), new Vector2(340f, 250f), new Vector2(1f, 1f));
             UIFactory.Img(infoPanel, UIFactory.PanelColor, ProcTex.RoundRect());
-            infoText = UIFactory.Label(infoPanel, "", 22, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(300f, 190f), TextAnchor.UpperLeft, new Color(1, 1, 1, 0.9f));
+            moneyText = UIFactory.Label(infoPanel, "", 26, new Vector2(0.5f, 1f), new Vector2(0, -22f), new Vector2(310f, 34f), TextAnchor.MiddleLeft, new Color(0.5f, 0.95f, 0.5f), FontStyle.Bold);
+            infoText = UIFactory.Label(infoPanel, "", 21, new Vector2(0.5f, 0.5f), new Vector2(0, -18f), new Vector2(310f, 200f), TextAnchor.UpperLeft, new Color(1, 1, 1, 0.9f));
         }
 
         void BuildLeft(Transform root)
@@ -186,9 +233,22 @@ namespace TractorSim
             btnGearUp.onDown = () => inp.Press("gearUp");
             btnGearDown = TouchButton.Create(rightGroup, "GEAR ▼", a, new Vector2(-260f, 495f), bs, 24);
             btnGearDown.onDown = () => inp.Press("gearDown");
-            btnRange = TouchButton.Create(rightGroup, "RANGE\nL / H", a, new Vector2(-415f, 495f), bs, 22);
+            btnRange = TouchButton.Create(rightGroup, "RANGE", a, new Vector2(-415f, 495f), bs, 22);
             btnRange.onDown = () => inp.Press("range");
             btnDir = TouchButton.Create(rightGroup, "F / R", a, new Vector2(-105f, 495f), bs, 30);
+            // implement & trolley controls
+            Vector2 ab = new Vector2(140f, 90f);
+            btnAttach = TouchButton.Create(rightGroup, "ATTACH", a, new Vector2(-105f, 615f), ab, 20);
+            btnAttach.onDown = () => inp.Press("attach");
+            btnLift = TouchButton.Create(rightGroup, "LIFT", a, new Vector2(-260f, 615f), ab, 22);
+            btnLift.onDown = () => inp.Press("lift");
+            btnPto = TouchButton.Create(rightGroup, "PTO", a, new Vector2(-415f, 615f), ab, 24);
+            btnPto.onDown = () => inp.Press("pto");
+            btnTip = TouchButton.Create(rightGroup, "TIP", a, new Vector2(-260f, 615f), ab, 24);
+            btnTip.onDown = () => inp.Press("tip");
+            btnLoad = TouchButton.Create(rightGroup, "LOAD", a, new Vector2(-415f, 615f), ab, 24);
+            btnLoad.onDown = () => inp.Press("load");
+            btnLoad.litColor = UIFactory.AccentGreen;
             btnDir.onDown = () => inp.Press("direction");
             btnDir.litColor = UIFactory.Danger;
         }
@@ -200,7 +260,7 @@ namespace TractorSim
             btnPause.onDown = () => { if (onPause != null) onPause(); };
             btnCam = TouchButton.Create(topLeft, "CAMERA", new Vector2(0f, 1f), new Vector2(195f, -50f), new Vector2(140f, 95f), 24);
             btnCam.onDown = () => { if (onCamera != null) onCamera(); };
-            btnRecover = TouchButton.Create(topLeft, "RECOVER", new Vector2(0f, 1f), new Vector2(355f, -50f), new Vector2(160f, 95f), 24);
+            btnRecover = TouchButton.Create(topLeft, "RECOVER\n₹500", new Vector2(0f, 1f), new Vector2(355f, -50f), new Vector2(160f, 95f), 22);
             btnRecover.onDown = () => { if (onRecover != null) onRecover(); };
             btnRecover.Lit = true; btnRecover.litColor = UIFactory.Danger;
         }
@@ -236,13 +296,15 @@ namespace TractorSim
 
         void Update()
         {
-            if (tractor == null || !Canvas.enabled) return;
+            if (tractor == null || tractor.Physics == null || !Canvas.enabled) return;
+            UpdateImplementUI();
+            UpdateMissionUI();
             var e = tractor.Engine;
             var spec = tractor.Spec;
             float kmh = Mathf.Abs(tractor.Physics.SpeedKmh);
 
             rpmNeedle.localEulerAngles = new Vector3(0, 0, -Mathf.Lerp(-120f, 120f, e.Rpm / 2500f));
-            speedNeedle.localEulerAngles = new Vector3(0, 0, -Mathf.Lerp(-120f, 120f, kmh / 40f));
+            speedNeedle.localEulerAngles = new Vector3(0, 0, -Mathf.Lerp(-120f, 120f, kmh / SpeedoMax()));
             rpmText.text = Mathf.RoundToInt(e.Rpm / 10f) * 10 + "";
             speedText.text = kmh.ToString("0.0");
 
@@ -280,7 +342,8 @@ namespace TractorSim
             Lamp(lampPark, tractor.Brakes.Handbrake, UIFactory.Danger);
             Lamp(lampDiff, dtn.DiffLock, UIFactory.Accent);
             Lamp(lampBeam, tractor.Headlights, new Color(0.3f, 0.6f, 1f));
-            Lamp(lampRange, dtn.Gearbox.Range == 0 && !dtn.Gearbox.InNeutral, new Color(0.9f, 0.9f, 0.9f));
+            lampRange.text = dtn.Gearbox.RangeName(dtn.Gearbox.Range);
+            Lamp(lampRange, !dtn.Gearbox.InNeutral, new Color(0.9f, 0.9f, 0.9f));
 
             btnStart.label.text = e.Running ? "STOP" : (e.Cranking ? "..." : "START");
             btnStart.Lit = e.Running;
@@ -290,23 +353,91 @@ namespace TractorSim
             btnIndL.Lit = tractor.Indicator == -1 && blink;
             btnIndR.Lit = tractor.Indicator == 1 && blink;
             btnHaz.Lit = tractor.Indicator == 2 && blink;
-            btnRecover.gameObject.SetActive(tractor.Overturned || tractor.Stuck);
+            bool trolleyTipped = hitch != null && hitch.CurrentTrolley != null && hitch.CurrentTrolley.IsTipped;
+            btnRecover.gameObject.SetActive(tractor.Overturned || tractor.Stuck || trolleyTipped);
             if (clutchLabelHint != null) clutchLabelHint.enabled = settings.showHints;
 
             var w = tractor.Physics.Wheels[2];
             float lph = e.FuelRateLph;
-            infoText.text =
+            moneyText.text = "₹ " + Career.Money.ToString("N0");
+            string imp = "";
+            if (hitch != null && hitch.Current != null)
+            {
+                var tr = hitch.CurrentTrolley;
+                imp = tr != null ? "\nTrolley: " + (tr.CargoKg > 0 ? Mathf.RoundToInt(tr.CargoKg) + " kg " + tr.Cargo : "empty") + "  (" + (tr.TotalMass / 1000f).ToString("0.0") + " t)"
+                                 : "\n" + hitch.Current.displayName + (hitch.Current.Lowered ? " · working" : " · raised") + (hitch.DraftForce > 1 ? "  draft " + (hitch.DraftForce / 1000f).ToString("0.0") + " kN" : "");
+            }
+            if (TestGroundBuilder.Farm != null && hitch != null && hitch.Current != null && hitch.CurrentTrolley == null)
+            {
+                var f = TestGroundBuilder.Farm;
+                imp += "\nField: worked " + Mathf.RoundToInt(100f - f.Percent(FieldArea.Stubble)) + "%  sown " + Mathf.RoundToInt(f.Percent(FieldArea.Sown) + f.Percent(FieldArea.Sprayed)) + "%";
+            }
+            infoText.text = tractor.Spec.displayName + imp + "\n" +
                 "Surface: " + w.props.name + "\n" +
                 "Slope: " + Mathf.RoundToInt(tractor.Physics.SlopeDeg) + "°\n" +
                 "Fuel use: " + lph.ToString("0.0") + " L/h\n" +
                 "Load: " + Mathf.RoundToInt(e.Rack * 100f) + "%   " + (e.PowerKw * 1.341f).ToString("0") + " hp\n" +
-                "Odometer: " + (tractor.Physics.Odometer / 1000f + SaveSystem.Data.odometerKm).ToString("0.00") + " km\n" +
-                "Hand throttle: " + Mathf.RoundToInt(inp.HandThrottle * 100f) + "%";
+                "Odometer: " + (tractor.Physics.Odometer / 1000f + SaveSystem.Data.odometerKm).ToString("0.0") + " km";
 
             if (toastTimer > 0f)
             {
                 toastTimer -= Time.unscaledDeltaTime;
                 var c = toastText.color; c.a = Mathf.Clamp01(toastTimer * 2f); toastText.color = c;
+            }
+        }
+
+        void UpdateImplementUI()
+        {
+            bool hasCur = hitch != null && hitch.Current != null;
+            bool mounted = hasCur && hitch.Current.hitchType == HitchType.ThreePoint;
+            bool trolley = hasCur && hitch.CurrentTrolley != null;
+            bool canHitch = hitch != null && hitch.Candidate != null && !hasCur;
+            btnAttach.gameObject.SetActive(hasCur || canHitch);
+            if (hasCur) { btnAttach.label.text = "DETACH"; btnAttach.Lit = false; }
+            else if (canHitch)
+            {
+                btnAttach.label.text = hitch.CanAttach ? "ATTACH\n" + ShortName(hitch.Candidate) : ShortName(hitch.Candidate) + "\n" + (hitch.CandidateWhy ?? "");
+                btnAttach.Lit = hitch.CanAttach; btnAttach.litColor = UIFactory.AccentGreen;
+            }
+            btnLift.gameObject.SetActive(mounted);
+            btnPto.gameObject.SetActive(mounted && hitch.Current.ptoPowerKw > 0f);
+            if (mounted) { btnLift.label.text = hitch.Current.Lowered ? "RAISE" : "LOWER"; btnLift.Lit = hitch.Current.Lowered; btnPto.Lit = hitch.Current.PtoOn; }
+            btnTip.gameObject.SetActive(trolley);
+            if (trolley) btnTip.Lit = hitch.CurrentTrolley.Tipping;
+            btnLoad.gameObject.SetActive(mission != null && mission.CanLoad);
+            btnLoad.Lit = btnLoad.gameObject.activeSelf;
+        }
+
+        static string ShortName(Implement i)
+        {
+            string n = i.displayName;
+            int cut = n.IndexOf(' ');
+            return cut > 0 && n.Length > 14 ? n.Substring(0, Mathf.Min(n.Length, 14)) : n;
+        }
+
+        void UpdateMissionUI()
+        {
+            if (mission == null || missionPanel == null) return;
+            missionPanel.gameObject.SetActive(true);
+            missionTitle.text = mission.title;
+            string extra = "";
+            var tr = hitch != null ? hitch.CurrentTrolley : null;
+            if (mission.Step == MissionStep.Deliver || mission.Step == MissionStep.Unload)
+                extra = "\nTime " + CargoMission.FormatTime(mission.Timer) + "   Cargo " + (tr != null ? Mathf.RoundToInt(tr.CargoKg) : 0) + " / " + Mathf.RoundToInt(mission.LoadedKg) + " kg";
+            if (mission.Step == MissionStep.Complete) missionText.text = "Delivered " + Mathf.RoundToInt(mission.DeliveredKg) + " kg in " + CargoMission.FormatTime(mission.Timer) + "\nRestart from pause for another run";
+            else if (mission.Step == MissionStep.Failed) missionText.text = "Failed – restart from the pause menu";
+            else missionText.text = mission.Objective + extra;
+            // direction arrow relative to the camera
+            var cam = Camera.main;
+            bool showNav = mission.Active && cam != null;
+            navArrow.gameObject.SetActive(showNav); navText.gameObject.SetActive(showNav);
+            if (showNav)
+            {
+                Vector3 to = mission.TargetPos - tractor.transform.position; to.y = 0f;
+                Vector3 f = cam.transform.forward; f.y = 0f;
+                float ang = Vector3.SignedAngle(f, to, Vector3.up);
+                navArrow.localEulerAngles = new Vector3(0, 0, -ang - 90f);   // arrow sprite points left at 0°
+                navText.text = Mathf.RoundToInt(to.magnitude) + " m";
             }
         }
 

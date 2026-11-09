@@ -11,6 +11,8 @@ namespace TractorSim
     {
         public static Vector3 SpawnPoint = new Vector3(0f, 0.4f, -25f);
         public static Quaternion SpawnRotation = Quaternion.identity;
+        public static CargoMission Mission;
+        public static FieldArea Farm;
 
         static Transform root;
         static Material grassM, dirtM, mudM, sandM, rockM, fieldM, roadM, brickM, plasterM, mudWallM, thatchM, woodM, leafM, leafM2, trunkM, waterM, concreteM, signM, steelM, wetM;
@@ -91,7 +93,9 @@ namespace TractorSim
             Sign(new Vector3(-68f, 0, 116f), "RIVER FORD\nkeep momentum");
 
             // ---- ploughed field at the top of the road ----
-            Slab("Field", new Vector3(0f, -0.03f, 255f), new Vector3(70f, 0.1f, 40f), fieldM, SurfaceKind.Field);
+            var fieldGo = Slab("Field", new Vector3(0f, -0.03f, 255f), new Vector3(70f, 0.1f, 40f), fieldM, SurfaceKind.Field);
+            Farm = fieldGo.AddComponent<FieldArea>();
+            Farm.Init();
             Crops(new Vector3(-55f, 0f, 255f), 30f, 36f, true);   // sugarcane
             Crops(new Vector3(55f, 0f, 255f), 30f, 36f, false);   // wheat
             Sign(new Vector3(8f, 0, 230f), "FARM FIELD");
@@ -99,7 +103,63 @@ namespace TractorSim
             Village();
             Trees();
             PolesAlongRoad();
+            ImplementYard();
+            SugarMillRun();
             return root;
+        }
+
+        /// <summary>Concrete yard with every implement parked, hitch towards the lane so you can reverse onto it.</summary>
+        static void ImplementYard()
+        {
+            Slab("ImplementYard", new Vector3(27f, -0.03f, 17f), new Vector3(34f, 0.1f, 16f), MatLib.Opaque(new Color(0.6f, 0.6f, 0.58f), 0.1f, 0f), SurfaceKind.Asphalt);
+            string[] mounted = { "rotavator", "cultivator", "plough", "harrow", "seeddrill", "leveller" };
+            for (int i = 0; i < mounted.Length; i++)
+                ImplementFactory.Create(mounted[i], new Vector3(14f + i * 4.2f, 0.15f, 21.5f), Quaternion.Euler(0, 180f, 0)).transform.SetParent(root, true);
+            ImplementFactory.Create("sprayer", new Vector3(14f + 6 * 4.2f + 3f, 0.15f, 21.5f), Quaternion.Euler(0, 180f, 0)).transform.SetParent(root, true);
+            Sign(new Vector3(12f, 0, 9f), "IMPLEMENT YARD\nreverse up · ATTACH");
+            // trolleys parked across the road
+            ImplementFactory.Create("trolley_single", new Vector3(-14f, 0.7f, 10f), Quaternion.identity).transform.SetParent(root, true);
+            ImplementFactory.Create("trolley_tandem", new Vector3(-21f, 0.7f, 10f), Quaternion.identity).transform.SetParent(root, true);
+            ImplementFactory.Create("trolley_single", new Vector3(-28f, 0.7f, 10f), Quaternion.identity).transform.SetParent(root, true);
+        }
+
+        /// <summary>Cargo job: cut sugarcane from the plot to the sugar mill by the village.</summary>
+        static void SugarMillRun()
+        {
+            var m = new GameObject("SugarcaneMission").transform; m.SetParent(root, false);
+            var vis = new GameObject("Visual").transform; vis.SetParent(m, false);
+            var cane = MatLib.Opaque(new Color(0.45f, 0.58f, 0.24f), 0.1f, 0f);
+            // loading bay beside the cane plot with cut cane bundles
+            var load = Zone.Create(m, "CaneLoadingBay", new Vector3(-31f, 0f, 262f), new Vector3(5f, 4f, 12f), 0f);
+            Slab("CaneBay", new Vector3(-31f, -0.03f, 262f), new Vector3(6f, 0.1f, 13f), MatLib.Opaque(new Color(0.55f, 0.45f, 0.32f), 0.05f, 0f), SurfaceKind.Dirt);
+            for (int i = 0; i < 18; i++)
+                MeshUtil.Part(vis, PrimitiveType.Cube, new Vector3(-36.5f - (i % 3) * 0.6f, 0.2f + (i / 9) * 0.35f, 256f + (i / 3 % 3) * 4f), new Vector3(0.5f, 0.32f, 3.2f), Vector3.zero, cane, "CaneBundle");
+            Sign(new Vector3(-26f, 0, 252f), "CANE LOADING\nstop trolley · LOAD");
+            // sugar mill: big shed + chimney
+            var shed = MatLib.Opaque(new Color(0.75f, 0.72f, 0.65f), 0.1f, 0f);
+            var tin = MatLib.Opaque(new Color(0.55f, 0.58f, 0.6f), 0.6f, 0.7f);
+            WorldProps.Shed(vis, m, new Vector3(-42f, 0f, -48f), 0f, 20f, 12f, 8f, shed, tin);
+            MeshUtil.Part(vis, PrimitiveType.Cylinder, new Vector3(-52f, 12f, -52f), new Vector3(2f, 12f, 2f), Vector3.zero, brickM, "Chimney");
+            WorldProps.Capsule(m, new Vector3(-52f, 12f, -52f), 1f, 24f);
+            var drop = Zone.Create(m, "MillYard", new Vector3(-42f, 0f, -36f), new Vector3(9f, 4f, 12f), 0f);
+            Slab("MillYardPad", new Vector3(-42f, -0.03f, -36f), new Vector3(10f, 0.1f, 13f), MatLib.Opaque(new Color(0.6f, 0.6f, 0.58f), 0.1f, 0f), SurfaceKind.Asphalt);
+            Sign(new Vector3(-36f, 0, -28f), "SUGAR MILL\nTIP here");
+            MeshUtil.CombineByMaterial(vis.gameObject);
+
+            var mission = m.gameObject.AddComponent<CargoMission>();
+            mission.title = "Sugarcane to the mill";
+            mission.cargo = CargoType.Sugarcane;
+            mission.targetKg = 3000f; mission.basePay = 3500; mission.parTimeSec = 360f;
+            mission.loadZone = load; mission.deliveryZone = drop;
+            Vector3[] cps = { new Vector3(0, 0, 200f), new Vector3(0, 0, 110f), new Vector3(0, 0, 40f), new Vector3(-38f, 0, 16f), new Vector3(-40f, 0, -12f) };
+            float[] yaws = { 180f, 180f, 180f, 270f, 180f };
+            for (int i = 0; i < cps.Length; i++)
+            {
+                var z = Zone.Create(m, "CP" + (i + 1), cps[i] + Vector3.down * 0.5f, new Vector3(i < 3 ? 12f : 10f, 6f, 4f), yaws[i]);
+                mission.checkpoints.Add(z);
+                mission.checkpointMarkers.Add(WorldProps.Gate(m, cps[i], yaws[i], i < 3 ? 10f : 9f, "CHECKPOINT " + (i + 1)));
+            }
+            Mission = mission;
         }
 
         static float EdgeFade(float x, float z, float hx, float hz, float band)
@@ -116,7 +176,8 @@ namespace TractorSim
             mudM = MatLib.Opaque(Color.white, 0.55f, 0f, ProcTex.Ground("mud", new Color(0.2f, 0.14f, 0.08f), new Color(0.34f, 0.25f, 0.15f), 4f, 0.2f, 3), new Vector2(6f, 7f));
             sandM = MatLib.Opaque(Color.white, 0.05f, 0f, ProcTex.Ground("sand", new Color(0.82f, 0.7f, 0.48f), new Color(0.93f, 0.83f, 0.62f), 7f, 0.15f, 4), Vector2.one);
             rockM = MatLib.Opaque(Color.white, 0.15f, 0f, ProcTex.Ground("rock", new Color(0.42f, 0.4f, 0.37f), new Color(0.6f, 0.58f, 0.54f), 9f, 0.4f, 5), new Vector2(2f, 2f));
-            fieldM = MatLib.Opaque(Color.white, 0.05f, 0f, ProcTex.Ground("field", new Color(0.32f, 0.22f, 0.13f), new Color(0.48f, 0.35f, 0.22f), 6f, 0.3f, 6, true), new Vector2(4f, 10f));
+            // harvested stubble: straw-coloured rows over dry soil (implements paint over this)
+            fieldM = MatLib.Opaque(Color.white, 0.05f, 0f, ProcTex.Ground("stubble", new Color(0.5f, 0.41f, 0.27f), new Color(0.7f, 0.61f, 0.4f), 8f, 0.45f, 6, true), new Vector2(6f, 12f));
             wetM = MatLib.Opaque(Color.white, 0.6f, 0f, ProcTex.Ground("wetgrass", new Color(0.22f, 0.32f, 0.12f), new Color(0.38f, 0.42f, 0.2f), 6f, 0.3f, 7), new Vector2(8f, 10f));
             roadM = MatLib.Opaque(Color.white, 0.2f, 0f, ProcTex.Road(), new Vector2(1f, 40f));
             brickM = MatLib.Opaque(Color.white, 0.1f, 0f, ProcTex.Brick(), new Vector2(2f, 1f));
@@ -338,7 +399,7 @@ namespace TractorSim
             // cattle resting under the trees (static for Stage 1)
             Cow(vis, v, new Vector3(-12f, 0, -30f), 30f, new Color(0.9f, 0.88f, 0.82f));
             Cow(vis, v, new Vector3(-13.5f, 0, -26f), 200f, new Color(0.18f, 0.16f, 0.15f));   // buffalo
-            Cow(vis, v, new Vector3(22f, 0, 8f), 110f, new Color(0.6f, 0.42f, 0.28f));
+            Cow(vis, v, new Vector3(30f, 0, 2f), 110f, new Color(0.6f, 0.42f, 0.28f));
             MeshUtil.CombineByMaterial(vis.gameObject);
         }
 
@@ -407,7 +468,7 @@ namespace TractorSim
             }
             // shade trees near the village
             Tree(vis, t, new Vector3(-12f, 0, -34f), rnd); Tree(vis, t, new Vector3(-14f, 0, -22f), rnd); Tree(vis, t, new Vector3(9f, 0, -36f), rnd);
-            Tree(vis, t, new Vector3(24f, 0, 4f), rnd); Tree(vis, t, new Vector3(-6f, 0, -60f), rnd);
+            Tree(vis, t, new Vector3(44f, 0, 4f), rnd); Tree(vis, t, new Vector3(-6f, 0, -60f), rnd);
             MeshUtil.CombineByMaterial(vis.gameObject);
         }
 

@@ -38,6 +38,7 @@ namespace TractorSim
             Engine = new EngineSystem(spec);
             Gearbox = new TransmissionSystem(spec);
             Auto = new AutomaticController(this);
+            SetupWheels();
         }
 
         /// <summary>Clutch pedal → plate engagement with a realistic biting zone.</summary>
@@ -76,21 +77,53 @@ namespace TractorSim
             return true;
         }
 
-        // ---- rear axle state (owned here because it is coupled to the engine) ----
-        public float OmegaLeft, OmegaRight;           // rad/s, + = forward
-        public readonly float[] AxleForce = new float[2];   // average tyre Fx over the step, N
+        // ---- driven wheels state (owned here because they are coupled to the engine) ----
+        // index 0 = rear-left, 1 = rear-right, 2 = front-left, 3 = front-right (front only with 4WD)
+        public float[] WheelOmega = new float[4];         // rad/s, + = forward
+        public readonly float[] WheelForce = new float[4]; // average tyre Fx over the step, N
+        public float[] WheelRadius = new float[4];
+        public float[] WheelInertia = new float[4];
+        public int DrivenCount { get; private set; }
         public bool DiffLock;
-        public float RearWheelInertia = 32f;          // kg m^2 per rear wheel (tyre + rim + half-shaft)
         public int Substeps = 8;
 
-        public float RearOmegaAvg { get { return 0.5f * (OmegaLeft + OmegaRight); } }
+        public float OmegaLeft { get { return WheelOmega[0]; } set { WheelOmega[0] = value; } }
+        public float OmegaRight { get { return WheelOmega[1]; } set { WheelOmega[1] = value; } }
+        public float[] AxleForce { get { return WheelForce; } }
+        public float RearOmegaAvg { get { return 0.5f * (WheelOmega[0] + WheelOmega[1]); } }
+        /// <summary>Average ground speed the driven tyres are trying to roll at, m/s.</summary>
+        public float DrivenWheelSpeed
+        {
+            get { float s = 0f; for (int i = 0; i < DrivenCount; i++) s += WheelOmega[i] * WheelRadius[i]; return DrivenCount > 0 ? s / DrivenCount : 0f; }
+        }
+
+        void SetupWheels()
+        {
+            DrivenCount = Spec.fourWheelDrive ? 4 : 2;
+            float rr = Spec.rearWheelRadius, rf = Spec.frontWheelRadius;
+            WheelRadius[0] = WheelRadius[1] = rr;
+            WheelRadius[2] = WheelRadius[3] = rf;
+            WheelInertia[0] = WheelInertia[1] = Spec.rearWheelInertia;
+            WheelInertia[2] = WheelInertia[3] = Spec.rearWheelInertia * (rf / rr) * (rf / rr) * 0.6f;
+        }
+
+        public void ResetWheels() { for (int i = 0; i < 4; i++) { WheelOmega[i] = 0f; WheelForce[i] = 0f; } }
+
+        /// <summary>Backwards-compatible 2WD entry point.</summary>
+        public void Step(float dt, WheelContact left, WheelContact right, float speedKmh)
+        {
+            contactBuf[0] = left; contactBuf[1] = right;
+            contactBuf[2] = default(WheelContact); contactBuf[3] = default(WheelContact);
+            Step(dt, contactBuf, speedKmh);
+        }
+        readonly WheelContact[] contactBuf = new WheelContact[4];
 
         /// <summary>
-        /// Advance engine, clutch, gearbox, differential and rear wheel spin by dt.
-        /// The wheels' tyre forces are evaluated every substep; the averaged force is
-        /// returned in AxleForce for the physics engine to apply at the contact patches.
+        /// Advance engine, clutch, gearbox, differentials and driven-wheel spin by dt.
+        /// contacts: [RL, RR, FL, FR]; front entries are ignored for 2WD tractors.
+        /// Tyre forces are evaluated every substep; averages are returned in WheelForce.
         /// </summary>
-        public void Step(float dt, WheelContact left, WheelContact right, float speedKmh)
+        public void Step(float dt, WheelContact[] contacts, float speedKmh)
         {
             AutoBrakeAssist = 0f;
             float engagement;
@@ -109,82 +142,100 @@ namespace TractorSim
             if (Engine.Cranking && !Gearbox.InNeutral) engagement = 0f;
             ClutchEngagement = engagement;
 
+            int n = DrivenCount;
             if (AutoBrakeAssist > 0f)
-            {
-                left.brakeTorque += AutoBrakeAssist * Spec.brakeTorquePerRearWheel;
-                right.brakeTorque += AutoBrakeAssist * Spec.brakeTorquePerRearWheel;
-            }
+                for (int i = 0; i < n; i++)
+                    contacts[i].brakeTorque += AutoBrakeAssist * (i < 2 ? Spec.brakeTorquePerRearWheel : Spec.brakeTorquePerFrontWheel);
 
             float engineTorque = Engine.ComputeTorque(dt);
             float ratio = Gearbox.Ratio;
             float eff = Spec.drivelineEfficiency;
-            float r = Spec.rearWheelRadius;
-            float Iw = RearWheelInertia;
+            float rRef = Spec.rearWheelRadius;
             float Ie = Engine.Inertia;
             float capacity = Spec.clutchMaxTorqueNm * engagement;
             bool connected = ratio != 0f && engagement > 0.002f;
 
-            int n = Substeps < 1 ? 1 : Substeps;
-            float h = dt / n;
+            // k_i: gearing that makes every driven tyre want the same ground speed (front axle lead ignored)
+            // k maps a wheel's omega to "rear-equivalent" omega: wEq = w * r_i / rRef
+            for (int i = 0; i < n; i++) kBuf[i] = WheelRadius[i] / rRef;
+            float sumK2overI = 0f;
+            for (int i = 0; i < n; i++) sumK2overI += kBuf[i] * kBuf[i] / WheelInertia[i];
+
+            int steps = Substeps < 1 ? 1 : Substeps;
+            float h = dt / steps;
             float we = Engine.Omega;
-            float wl = OmegaLeft, wr = OmegaRight;
-            float sumFl = 0f, sumFr = 0f, sumTc = 0f;
+            for (int i = 0; i < 4; i++) sumF[i] = 0f;
+            float sumTc = 0f;
             bool anySlip = false;
 
-            for (int i = 0; i < n; i++)
+            for (int s = 0; s < steps; s++)
             {
-                float fl = TireModel.LongForce(wl, r, left);
-                float fr = TireModel.LongForce(wr, r, right);
-                float tc;
-
+                for (int i = 0; i < n; i++) fBuf[i] = TireModel.LongForce(WheelOmega[i], WheelRadius[i], contacts[i]);
+                float tc = 0f;
                 if (connected)
                 {
-                    // Implicit dry-friction clutch: find the plate torque that would make engine and
-                    // driveshaft turn at the same speed after this substep; if the plates can't hold
-                    // that much (capacity = clamp force x engagement) they slip at full capacity.
-                    // Stable at any gear ratio, locks naturally, drags the engine into a stall when overloaded.
-                    float wAvg = 0.5f * (wl + wr);
-                    float slipW = we - ratio * wAvg;
+                    // Implicit dry-friction clutch over all driven wheels (see README):
+                    // slip = we - ratio * avg(w_i k_i); choose plate torque that zeroes slip this substep,
+                    // clamp to capacity → slips when overloaded, locks otherwise, stalls when dragged down.
+                    float wEq = 0f, aw = 0f;
+                    for (int i = 0; i < n; i++)
+                    {
+                        wEq += WheelOmega[i] * kBuf[i];
+                        aw += -fBuf[i] * WheelRadius[i] * kBuf[i] / WheelInertia[i];
+                    }
+                    wEq /= n; aw /= n;
+                    float slipW = we - ratio * wEq;
                     float ae = engineTorque / Ie;
-                    float aw = -(fl + fr) * r * 0.5f / Iw;
-                    float denom = h * (1f / Ie + ratio * ratio * eff / (2f * Iw));
+                    float denom = h * (1f / Ie + ratio * ratio * eff / ((float)n * n) * sumK2overI);
                     float tcStar = (slipW + h * (ae - ratio * aw)) / denom;
                     tc = Num.Clamp(tcStar, -capacity, capacity);
                     if (Num.Abs(tcStar) > capacity * 1.001f) anySlip = true;
                     we += (engineTorque - tc) / Ie * h;
                     float td = tc * ratio * eff;
-                    float wlNew = wl + (td * 0.5f - fl * r) / Iw * h;
-                    float wrNew = wr + (td * 0.5f - fr * r) / Iw * h;
-                    if (DiffLock) { float a = 0.5f * (wlNew + wrNew); wlNew = a; wrNew = a; }
-                    ApplyBrake(ref wlNew, left.brakeTorque, Iw, h);
-                    ApplyBrake(ref wrNew, right.brakeTorque, Iw, h);
-                    wl = wlNew; wr = wrNew;
-                    sumTc += tc;
+                    for (int i = 0; i < n; i++)
+                        WheelOmega[i] += (td / n * kBuf[i] - fBuf[i] * WheelRadius[i]) / WheelInertia[i] * h;
                 }
                 else
                 {
-                    tc = 0f;
                     we += engineTorque / Ie * h;
-                    float wlNew = wl + (-fl * r) / Iw * h;
-                    float wrNew = wr + (-fr * r) / Iw * h;
-                    if (DiffLock) { float a = 0.5f * (wlNew + wrNew); wlNew = a; wrNew = a; }
-                    ApplyBrake(ref wlNew, left.brakeTorque, Iw, h);
-                    ApplyBrake(ref wrNew, right.brakeTorque, Iw, h);
-                    wl = wlNew; wr = wrNew;
+                    for (int i = 0; i < n; i++)
+                        WheelOmega[i] += (-fBuf[i] * WheelRadius[i]) / WheelInertia[i] * h;
                 }
+                if (n == 4)
+                {
+                    // tractor MFWD has no centre differential: front and rear axles are geared together,
+                    // so their average ground speeds are equal (momentum-conserving projection)
+                    float kr = kBuf[0], kf = kBuf[2];
+                    float rearAvg = 0.5f * (WheelOmega[0] + WheelOmega[1]);
+                    float frontAvg = 0.5f * (WheelOmega[2] + WheelOmega[3]);
+                    float Ir = 2f * WheelInertia[0] / (kr * kr), If = 2f * WheelInertia[2] / (kf * kf);
+                    float common = (rearAvg * kr * Ir + frontAvg * kf * If) / (Ir + If);
+                    float dr = common / kr - rearAvg, df = common / kf - frontAvg;
+                    WheelOmega[0] += dr; WheelOmega[1] += dr;
+                    WheelOmega[2] += df; WheelOmega[3] += df;
+                }
+                if (DiffLock)
+                {
+                    for (int a = 0; a < n; a += 2)
+                    {
+                        float avg = 0.5f * (WheelOmega[a] + WheelOmega[a + 1]);
+                        WheelOmega[a] = avg; WheelOmega[a + 1] = avg;
+                    }
+                }
+                for (int i = 0; i < n; i++) ApplyBrake(ref WheelOmega[i], contacts[i].brakeTorque, WheelInertia[i], h);
                 if (we < 0f) we = 0f;
-                sumFl += fl; sumFr += fr;
+                for (int i = 0; i < n; i++) sumF[i] += fBuf[i];
+                sumTc += tc;
             }
 
-            OmegaLeft = wl; OmegaRight = wr;
-            AxleForce[0] = sumFl / n;
-            AxleForce[1] = sumFr / n;
-            ClutchTorque = sumTc / n;
+            for (int i = 0; i < 4; i++) WheelForce[i] = i < n ? sumF[i] / steps : 0f;
+            ClutchTorque = sumTc / steps;
             ClutchSlipping = anySlip;
             Engine.SetOmegaAndUpdate(we, dt);
             WheelTorque = ClutchTorque * ratio * eff;
             LoadFactor = Engine.Running ? Engine.Rack : 0f;
         }
+        readonly float[] kBuf = new float[4], fBuf = new float[4], sumF = new float[4];
 
         static void ApplyBrake(ref float w, float brakeTorque, float inertia, float h)
         {
@@ -312,7 +363,7 @@ namespace TractorSim
             if (sinceShift < 1.1f || Engagement < 0.92f) return;
 
             // don't chase revs caused by wheelspin (mud, sand): only upshift when the tyres grip
-            float wheelKmh = Num.Abs(d.RearOmegaAvg) * spec.rearWheelRadius * 3.6f;
+            float wheelKmh = Num.Abs(d.DrivenWheelSpeed) * 3.6f;
             bool spinning = wheelKmh > absSpeed * 1.25f + 1.0f;
 
             float rpm = eng.Rpm;
@@ -346,14 +397,15 @@ namespace TractorSim
             }
             else
             {
-                if (!spinning && gb.Range == 0 && throttle > 0.6f && rpm > spec.ratedRpm * 0.95f)
+                int rr = gb.Range < gb.ReverseRatios.Length ? gb.Range : gb.ReverseRatios.Length - 1;
+                if (!spinning && rr < gb.ReverseRatios.Length - 1 && throttle > 0.6f && rpm > spec.ratedRpm * 0.95f)
                 {
-                    float predicted = rpm * gb.ReverseRatios[1] / ratio;
-                    if (predicted > 1400f) BeginShift(-1, 1);
+                    float predicted = rpm * gb.ReverseRatios[rr + 1] / ratio;
+                    if (predicted > 1400f) BeginShift(-1, rr + 1);
                 }
-                else if (gb.Range == 1 && eng.Rack > 0.97f && rpm < 1300f)
+                else if (rr > 0 && eng.Rack > 0.97f && rpm < 1300f)
                 {
-                    BeginShift(-1, 0);
+                    BeginShift(-1, rr - 1);
                 }
             }
         }

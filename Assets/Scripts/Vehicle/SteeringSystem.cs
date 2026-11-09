@@ -43,6 +43,7 @@ namespace TractorSim
         public float Pedal { get; private set; }
         public float LeftTorque { get; private set; }
         public float RightTorque { get; private set; }
+        public float FrontTorque { get; private set; }
         public bool Active { get { return Pedal > 0.05f || Handbrake; } }
 
         public BrakeSystem(TractorSpec spec) { this.spec = spec; }
@@ -55,6 +56,7 @@ namespace TractorSim
             if (Handbrake) t = Mathf.Max(t, spec.handbrakeTorque);
             LeftTorque = t;
             RightTorque = t;
+            FrontTorque = Pedal * Pedal * spec.brakeTorquePerFrontWheel;
         }
     }
 }

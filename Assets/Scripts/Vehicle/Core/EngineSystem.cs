@@ -22,6 +22,7 @@ namespace TractorSim
         public float TempC = 32f;
         public float AmbientC = 32f;
         public float DamageDerate = 1f;    // 1 = healthy
+        public float PtoLoadNm;            // torque drawn by PTO implements / hydraulics
 
         /// <summary>Set for one step when something notable happens (stall, start fail…). Consumer clears it.</summary>
         public string Event;
@@ -108,7 +109,7 @@ namespace TractorSim
             if (TempC > 115f) derate *= Num.Clamp(1f - (TempC - 115f) / 20f, 0.4f, 1f);
             if (FuelL <= 0f) { Rack = 0f; }
             GrossTorque = Spec.GrossTorque(Rpm) * Rack * derate;
-            NetTorque = GrossTorque - friction;
+            NetTorque = GrossTorque - friction - PtoLoadNm;
             return NetTorque;
         }
 
@@ -140,7 +141,8 @@ namespace TractorSim
             else FuelRateLph = 0f;
 
             // Coolant temperature: heat from fuel burned, cooling via fan (rpm) and radiator
-            float heat = Running ? (0.9f + PowerKw * 0.09f) : 0f;
+            float ratedKw = Spec.ratedPowerHp * 0.7457f;
+            float heat = Running ? (0.9f + PowerKw / ratedKw * 3.15f) : 0f;
             float fan = 0.35f + Rpm / Spec.ratedRpm;
             float thermostatOpen = Num.Clamp01((TempC - 82f) / 8f);
             float cooling = (TempC - AmbientC) * (0.004f + 0.045f * thermostatOpen * fan);

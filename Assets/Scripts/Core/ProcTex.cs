@@ -127,6 +127,63 @@ namespace TractorSim
             return t;
         }
 
+        /// <summary>Compacted gravel road surface with wheel ruts along V.</summary>
+        public static Texture2D Gravel()
+        {
+            Texture2D t;
+            if (texCache.TryGetValue("gravel", out t)) return t;
+            const int S = 128;
+            t = New(S, S, true);
+            var rnd = new System.Random(31);
+            var px = new Color[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float u = x / (float)S;
+                    float n = TileNoise(u, y / (float)S, 9f, 3f, 7f) * 0.6f + TileNoise(u, y / (float)S, 30f, 1f, 2f) * 0.4f;
+                    var c = Color.Lerp(new Color(0.42f, 0.38f, 0.32f), new Color(0.62f, 0.57f, 0.49f), n);
+                    // two darker wheel ruts
+                    float rut = Mathf.Min(Mathf.Abs(u - 0.27f), Mathf.Abs(u - 0.73f));
+                    if (rut < 0.06f) c *= 0.82f + rut * 3f;
+                    if (rnd.NextDouble() < 0.08) c *= 0.7f + 0.6f * (float)rnd.NextDouble();
+                    c.a = 1; px[y * S + x] = c;
+                }
+            t.SetPixels(px); t.Apply(true);
+            texCache["gravel"] = t;
+            return t;
+        }
+
+        /// <summary>Grass blade cluster with alpha for terrain detail billboards.</summary>
+        public static Texture2D GrassBlades()
+        {
+            Texture2D t;
+            if (texCache.TryGetValue("blades", out t)) return t;
+            const int W = 64, H = 64;
+            t = New(W, H, false);
+            var px = new Color[W * H];
+            var rnd = new System.Random(41);
+            for (int i = 0; i < px.Length; i++) px[i] = new Color(0.4f, 0.55f, 0.25f, 0f);
+            for (int b = 0; b < 22; b++)
+            {
+                float x0 = 4 + (float)rnd.NextDouble() * (W - 8);
+                float lean = ((float)rnd.NextDouble() - 0.5f) * 0.6f;
+                float h = H * (0.55f + 0.45f * (float)rnd.NextDouble());
+                float shade = 0.75f + 0.35f * (float)rnd.NextDouble();
+                for (int y = 0; y < (int)h; y++)
+                {
+                    float tt = y / h;
+                    float w = Mathf.Lerp(2.2f, 0.3f, tt);
+                    float cx = x0 + lean * y;
+                    for (int x = Mathf.Max(0, (int)(cx - w)); x <= Mathf.Min(W - 1, (int)(cx + w)); x++)
+                        px[y * W + x] = new Color(0.32f * shade + tt * 0.15f, 0.48f * shade + tt * 0.12f, 0.2f * shade, 1f);
+                }
+            }
+            t.SetPixels(px); t.Apply(false);
+            t.wrapMode = TextureWrapMode.Clamp;
+            texCache["blades"] = t;
+            return t;
+        }
+
         public static Texture2D SoftCircle()
         {
             Texture2D t;
