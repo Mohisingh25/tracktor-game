@@ -26,7 +26,7 @@ namespace TractorSim.EditorTools
             ConfigurePlayer();
             CreateMaterials();
             CreateArtCatalog();
-            IncludeShaders();
+            // IncludeShaders() disabled: forcing hidden built-in shaders into the build crashed the shader compiler in CI.
             PostFxSetup.CreateCameraRig();
             CreateScene();
             AssetDatabase.SaveAssets();
@@ -114,6 +114,9 @@ namespace TractorSim.EditorTools
             PlayerSettings.allowedAutorotateToPortrait = false;
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
             PlayerSettings.colorSpace = ColorSpace.Linear;
+            // OpenGL ES 3 only on Android: half the shader compile work in CI and runs on every phone since 2014
+            PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
+            PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.OpenGLES3 });
             PlayerSettings.Android.startInFullscreen = true;
             PlayerSettings.runInBackground = false;
 
