@@ -54,8 +54,9 @@ namespace TractorSim.EditorTools
             };
             BuildReport report = BuildPipeline.BuildPlayer(options);
             Debug.Log("[TractorSim] Build result: " + report.summary.result + "  size: " + report.summary.totalSize + " bytes  -> " + path);
-            if (Application.isBatchMode)
-                EditorApplication.Exit(report.summary.result == BuildResult.Succeeded ? 0 : 1);
+            // Let game-ci's -quit close the editor; throwing marks the CI step as failed.
+            if (report.summary.result != BuildResult.Succeeded)
+                throw new System.Exception("[TractorSim] Build failed: " + report.summary.result + " (" + report.summary.totalErrors + " errors)");
         }
 
         [MenuItem("Tractor Sim/Build macOS App")]
@@ -85,8 +86,9 @@ namespace TractorSim.EditorTools
             };
             BuildReport report = BuildPipeline.BuildPlayer(options);
             Debug.Log("[TractorSim] macOS build result: " + report.summary.result + " -> " + path);
-            if (Application.isBatchMode)
-                EditorApplication.Exit(report.summary.result == BuildResult.Succeeded ? 0 : 1);
+            // Let game-ci's -quit close the editor; throwing marks the CI step as failed.
+            if (report.summary.result != BuildResult.Succeeded)
+                throw new System.Exception("[TractorSim] Build failed: " + report.summary.result + " (" + report.summary.totalErrors + " errors)");
         }
 
         static string GetArg(string name)
