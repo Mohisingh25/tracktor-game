@@ -55,6 +55,37 @@ namespace TractorSim.EditorTools
                 EditorApplication.Exit(report.summary.result == BuildResult.Succeeded ? 0 : 1);
         }
 
+        [MenuItem("Tractor Sim/Build macOS App")]
+        public static void BuildMac()
+        {
+            Prepare();
+            // IL2CPP for macOS can only be built on a Mac; Mono builds anywhere (including the Linux CI runner)
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.defaultScreenWidth = 1600;
+            PlayerSettings.defaultScreenHeight = 900;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Standalone, "com.desisim.indiantractorsim");
+
+            string path = GetArg("-customBuildPath");
+            if (string.IsNullOrEmpty(path)) path = "build/StandaloneOSX/IndianTractorSim.app";
+            if (!path.EndsWith(".app")) path += ".app";
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+
+            var options = new BuildPlayerOptions
+            {
+                scenes = new[] { ScenePath },
+                locationPathName = path,
+                target = BuildTarget.StandaloneOSX,
+                targetGroup = BuildTargetGroup.Standalone,
+                options = BuildOptions.None
+            };
+            BuildReport report = BuildPipeline.BuildPlayer(options);
+            Debug.Log("[TractorSim] macOS build result: " + report.summary.result + " -> " + path);
+            if (Application.isBatchMode)
+                EditorApplication.Exit(report.summary.result == BuildResult.Succeeded ? 0 : 1);
+        }
+
         static string GetArg(string name)
         {
             var args = System.Environment.GetCommandLineArgs();
