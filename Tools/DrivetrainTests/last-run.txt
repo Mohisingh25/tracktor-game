@@ -1,0 +1,65 @@
+1. Start engine in neutral
+  t=  4.0s v=   0.0km/h rpm=  842 gear=N   eng=1.00 rack=0.12 run=True T=35C fuel=0.91L/h
+  PASS idles near 850 rpm
+2. Start refused in gear without clutch
+  PASS starter interlock: Press the clutch or select Neutral to start
+3. Manual: L1 gentle clutch release pulls away
+  PASS select gear 1 with clutch
+  t= 11.3s v=   1.7km/h rpm= 1262 gear=L1  eng=1.00 rack=0.14 run=True T=44C fuel=1.65L/h
+  PASS moving in L1, engine alive
+4. Manual: dump clutch in H4 at idle -> stall
+  t=  8.2s v=   0.5km/h rpm=   34 gear=H4  eng=1.00 rack=0.00 run=False T=37C fuel=0.00L/h
+  PASS engine stalled (Engine stalled!)
+5. Manual: shift without clutch -> grind/refused
+  PASS refused: Gears grinding ? press the clutch!
+6. Manual: drive up through all gears to top speed
+  -> t= 13.2s v=   4.4km/h rpm= 2233 gear=L2  eng=1.00 rack=0.29 run=True T=50C fuel=3.73L/h
+  -> t= 18.7s v=   6.0km/h rpm= 2232 gear=L3  eng=1.00 rack=0.30 run=True T=58C fuel=3.82L/h
+  -> t= 24.2s v=   8.9km/h rpm= 2230 gear=L4  eng=1.00 rack=0.32 run=True T=67C fuel=4.00L/h
+  -> t= 36.7s v=  11.3km/h rpm= 2217 gear=H1  eng=1.00 rack=0.44 run=True T=82C fuel=5.17L/h
+  -> t= 42.2s v=  16.0km/h rpm= 2213 gear=H2  eng=1.00 rack=0.47 run=True T=86C fuel=5.47L/h
+  -> t= 47.7s v=  20.9km/h rpm= 2177 gear=H3  eng=1.00 rack=0.81 run=True T=87C fuel=8.76L/h
+  -> t= 53.2s v=  26.5km/h rpm= 1859 gear=H4  eng=1.00 rack=1.00 run=True T=88C fuel=10.82L/h
+  t= 68.2s v=  32.3km/h rpm= 2216 gear=H4  eng=1.00 rack=0.44 run=True T=87C fuel=5.18L/h
+  PASS top speed in H4 ~31 km/h
+  PASS in H4
+7. Engine braking: lift off in H4
+  t= 72.2s v=  25.9km/h rpm= 1764 gear=H4  eng=1.00 rack=0.00 run=True T=84C fuel=0.93L/h
+  PASS slows on engine braking, engine still running
+8. Brake distance from top speed
+  from 32.3 km/h stopped in 6.5 m
+  PASS plausible stopping distance
+9. Automatic: full throttle on flat
+    shift -> t=  5.0s v=   0.0km/h rpm=  842 gear=N   eng=0.00 rack=0.12 run=True T=36C fuel=0.91L/h
+    shift -> t=  5.3s v=   0.0km/h rpm= 1134 gear=L2  eng=0.00 rack=1.00 run=True T=37C fuel=6.81L/h
+    shift -> t=  6.6s v=   4.0km/h rpm= 2054 gear=L3  eng=0.00 rack=0.00 run=True T=41C fuel=1.09L/h
+    shift -> t=  7.7s v=   5.8km/h rpm= 2165 gear=L4  eng=0.00 rack=0.00 run=True T=43C fuel=1.15L/h
+    shift -> t=  8.9s v=   8.6km/h rpm= 2159 gear=H1  eng=0.00 rack=0.00 run=True T=45C fuel=1.14L/h
+    shift -> t= 10.0s v=  11.1km/h rpm= 2152 gear=H2  eng=0.00 rack=0.00 run=True T=47C fuel=1.14L/h
+    shift -> t= 11.1s v=  15.2km/h rpm= 2067 gear=H3  eng=0.00 rack=0.00 run=True T=49C fuel=1.09L/h
+    shift -> t= 12.7s v=  20.7km/h rpm= 2093 gear=H4  eng=0.00 rack=0.00 run=True T=54C fuel=1.11L/h
+  t= 50.0s v=  32.3km/h rpm= 2216 gear=H4  eng=1.00 rack=0.44 run=True T=87C fuel=5.18L/h
+  PASS auto reaches H4 ~30 km/h
+  PASS no stall in auto
+10. Automatic: brake to stop -> clutch frees, engine idles
+  t= 58.0s v=   0.0km/h rpm=  842 gear=L2  eng=0.00 rack=0.12 run=True T=86C fuel=0.91L/h
+  PASS stopped, idling, clutch out
+11. Automatic: reverse selection
+  t= 66.0s v=  -3.2km/h rpm= 1682 gear=RL  eng=1.00 rack=0.17 run=True T=86C fuel=2.48L/h
+  PASS moving backwards in reverse
+  t= 76.0s v=   3.3km/h rpm= 1682 gear=L2  eng=1.00 rack=0.17 run=True T=85C fuel=2.49L/h
+  PASS auto braked, changed to forward and drove off
+12. Hill 12 deg, empty, automatic
+  t= 35.0s v=  18.2km/h rpm= 1970 gear=H3  eng=1.00 rack=1.00 run=True T=93C fuel=11.04L/h
+  PASS climbs 12 deg
+13. Same hill with 6 t loaded trolley
+  t= 35.0s v=   3.2km/h rpm= 1732 gear=L3  eng=1.00 rack=1.00 run=True T=95C fuel=10.43L/h
+  PASS much slower when loaded (3.2 vs 18.2 km/h)
+14. Mud (mu 0.35, crr 0.15) with load: struggles
+  t= 25.0s v=   0.2km/h rpm= 2204 gear=L2  eng=1.00 rack=0.55 run=True T=81C fuel=6.16L/h wheel slip speed=4.4
+  PASS rear wheels spinning faster than ground speed
+15. Manual: run warm at full load 3 minutes
+  t=185.0s v=  10.5km/h rpm= 2162 gear=H1  eng=1.00 rack=0.93 run=True T=90C fuel=10.02L/h
+  PASS coolant temp in working range
+
+ALL PASS
