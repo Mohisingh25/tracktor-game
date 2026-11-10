@@ -12,7 +12,7 @@ namespace TractorSim
     {
         public static GameManager I { get; private set; }
         public GameState State { get; private set; }
-        public static readonly string[] MapNames = { "Village Farm", "Himalayan Cargo Route" };
+        public static readonly string[] MapNames = { "Village Farm", "Himalayan Ghat" };
 
         TractorController tractor;
         CameraManager cams;
@@ -21,7 +21,9 @@ namespace TractorSim
         Light sun;
         Transform world;
         int builtMap = -1;
-        CargoMission mission;
+        MissionRunner mission;
+        int missionIndex = -1;
+        MissionDef CurrentDef { get { return missionIndex >= 0 ? MissionCatalog.All[missionIndex] : null; } }
         float autosaveTimer;
         int nativeW, nativeH;
         float sessionStartOdo;
@@ -96,7 +98,8 @@ namespace TractorSim
             menus.onShowroomPick = PreviewTractor;
             menus.onShowroomConfirm = () => { SaveSystem.Data.tractorId = tractor.Spec.id; SaveSystem.SaveProgress(); OpenMapSelect(); };
             menus.onShowroomBack = ToMainMenu;
-            menus.onMapChosen = StartDrive;
+            menus.onMapChosen = StartFreeRoam;
+            menus.onMissionChosen = StartMission;
             menus.onMapBack = OpenShowroom;
             menus.onResume = Resume;
             menus.onRestart = Restart;
@@ -116,12 +119,12 @@ namespace TractorSim
             Implement.All.Clear();
             world = map == 1 ? MountainBuilder.Build() : TestGroundBuilder.Build();
             builtMap = map;
-            mission = map == 1 ? MountainBuilder.Mission : TestGroundBuilder.Mission;
+            mission = null;
             ApplyTimeOfDay(SaveSystem.Settings.timeOfDay);
         }
 
-        Vector3 SpawnPos { get { return builtMap == 1 ? MountainBuilder.Spawn : TestGroundBuilder.SpawnPoint; } }
-        Quaternion SpawnRot { get { return builtMap == 1 ? MountainBuilder.SpawnRot : TestGroundBuilder.SpawnRotation; } }
+        Vector3 SpawnPos { get { SpawnPoint sp; if (CurrentDef != null && WorldAnchors.TryGetSpawn(CurrentDef.spawn, out sp)) return sp.pos; return builtMap == 1 ? MountainBuilder.Spawn : TestGroundBuilder.SpawnPoint; } }
+        Quaternion SpawnRot { get { SpawnPoint sp; if (CurrentDef != null && WorldAnchors.TryGetSpawn(CurrentDef.spawn, out sp)) return sp.rot; return builtMap == 1 ? MountainBuilder.SpawnRot : TestGroundBuilder.SpawnRotation; } }
 
         void SpawnTractor(string id)
         {
@@ -173,15 +176,27 @@ namespace TractorSim
         void OpenMapSelect()
         {
             State = GameState.MapSelect;
-            menus.ShowMapSelect(SaveSystem.Data.mapId);
+            menus.ShowMissionSelect();
+        }
+
+        public void StartFreeRoam(int map) { missionIndex = -1; StartDrive(map); }
+
+        public void StartMission(int index)
+        {
+            if (index < 0 || index >= MissionCatalog.Count || !MissionCatalog.Unlocked(index)) return;
+            missionIndex = index;
+            StartDrive(MissionCatalog.All[index].map);
         }
 
         public void StartDrive(int map)
         {
             SaveSystem.Data.mapId = map;
             menus.HideAll();
-            if (builtMap != map)
+            ClearMission();
+            // a mission always starts on a freshly built map: trolleys parked, field unworked, yards empty
+            if (builtMap != map || missionIndex >= 0)
             {
+                builtMap = -1;
                 BuildMap(map);
                 SpawnTractor(tractor.Spec.id);
             }
@@ -195,18 +210,46 @@ namespace TractorSim
             AudioListener.pause = false;
             SaveSystem.Data.sessions++;
             SaveSystem.SaveProgress();
+            ApplyMissionEnvironment();
             BeginMission();
             if (SaveSystem.Settings.showHints && SaveSystem.Data.sessions <= 1) menus.ShowGuide();
-            hud.Toast(tractor.Spec.displayName + " · " + MapNames[map], false);
+            hud.Toast(tractor.Spec.displayName + " · " + (CurrentDef != null ? CurrentDef.title : MapNames[map] + " – free roam"), false);
+        }
+
+        void ClearMission()
+        {
+            if (mission != null) { mission.Abort(); Destroy(mission.gameObject); mission = null; }
+            hud.SetMission(null);
         }
 
         void BeginMission()
         {
-            if (mission == null) { hud.SetMission(null); return; }
+            ClearMission();
+            var def = CurrentDef;
+            if (def == null || def.map != builtMap) return;
+            mission = MissionRunner.Create(def, missionIndex);
             mission.OnMessage = (m, w) => hud.Toast(m, w);
             mission.OnCheckpoint = () => { if (AudioManager.I != null) AudioManager.I.Click(); };
             mission.Begin(tractor);
             hud.SetMission(mission);
+        }
+
+        /// <summary>Night, fog and traffic for the current mission (free roam uses the settings).</summary>
+        void ApplyMissionEnvironment()
+        {
+            var def = CurrentDef;
+            ApplyTimeOfDay(def != null && def.night ? 2 : SaveSystem.Settings.timeOfDay);
+            if (def != null && def.fog)
+            {
+                RenderSettings.fogColor = def.night ? new Color(0.05f, 0.06f, 0.08f) : new Color(0.72f, 0.74f, 0.76f);
+                RenderSettings.fogStartDistance = 4f;
+                RenderSettings.fogEndDistance = def.night ? 55f : 75f;
+            }
+            if (TrafficManager.I != null)
+            {
+                int density = def != null && def.traffic >= 0 ? def.traffic : TrafficManager.DefaultDensity;
+                if (TrafficManager.I.Density != density) TrafficManager.I.SetDensity(density);
+            }
         }
 
         public void Pause()
@@ -240,6 +283,7 @@ namespace TractorSim
             SpawnTractor(tractor.Spec.id);
             hud.ResetControls();
             cams.SetMode(CamMode.Chase);
+            ApplyMissionEnvironment();
             BeginMission();
             Resume();
         }
@@ -269,8 +313,9 @@ namespace TractorSim
         public void ToMainMenu()
         {
             SaveProgress();
-            if (mission != null) mission.Abort();
-            hud.SetMission(null);
+            ClearMission();
+            missionIndex = -1;
+            ApplyTimeOfDay(SaveSystem.Settings.timeOfDay);
             State = GameState.Menu;
             Time.timeScale = 1f;
             AudioListener.pause = false;
@@ -357,7 +402,7 @@ namespace TractorSim
                 int w = Mathf.RoundToInt(nativeW * s.renderScale), h = Mathf.RoundToInt(nativeH * s.renderScale);
                 if (w != Screen.width || h != Screen.height) Screen.SetResolution(w, h, FullScreenMode.FullScreenWindow);
             }
-            ApplyTimeOfDay(s.timeOfDay);
+            if (CurrentDef != null) ApplyMissionEnvironment(); else ApplyTimeOfDay(s.timeOfDay);
         }
 
         void ApplyTimeOfDay(int tod)

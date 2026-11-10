@@ -12,7 +12,7 @@ namespace TractorSim
         public System.Action onPlay, onResume, onRestart, onMainMenu, onRecover, onService, onQuit, onSettingsChanged;
         public System.Action<string> onShowroomPick;
         public System.Action onShowroomConfirm, onShowroomBack, onMapBack;
-        public System.Action<int> onMapChosen;
+        public System.Action<int> onMapChosen, onMissionChosen;
         RectTransform showroom, mapSelect;
         Text statsText;
         GameSettings s;
@@ -46,7 +46,7 @@ namespace TractorSim
             UIFactory.Img(strip, new Color(0.03f, 0.03f, 0.04f, 0.72f));
             UIFactory.Label(main, "INDIAN TRACTOR", 76, new Vector2(0f, 1f), new Vector2(410f, -130f), new Vector2(760f, 90f), TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
             UIFactory.Label(main, "SIMULATOR 3D", 76, new Vector2(0f, 1f), new Vector2(410f, -215f), new Vector2(760f, 90f), TextAnchor.MiddleLeft, UIFactory.Accent, FontStyle.Bold);
-            UIFactory.Label(main, "5 tractors · implements & trolleys · Himalayan cargo route", 26, new Vector2(0f, 1f), new Vector2(410f, -285f), new Vector2(760f, 40f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.7f));
+            UIFactory.Label(main, "5 tractors · 20 missions · Himalayan ghat road", 26, new Vector2(0f, 1f), new Vector2(410f, -285f), new Vector2(760f, 40f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.7f));
             var a = new Vector2(0f, 1f);
             UIFactory.MenuButton(main, "PLAY", a, new Vector2(270f, -400f), new Vector2(460f, 100f), () => { if (onPlay != null) onPlay(); }, new Color(0.75f, 0.42f, 0.05f, 0.95f), 46);
             UIFactory.MenuButton(main, "SETTINGS", a, new Vector2(270f, -520f), new Vector2(460f, 90f), () => ShowSettings(false));
@@ -109,7 +109,7 @@ namespace TractorSim
             srStars.text = new string('★', sp.stars) + new string('☆', 5 - sp.stars);
             srBadge.enabled = sp.flagship;
             srDesc.text = sp.description;
-            float[] v = { sp.ratedPowerHp / 150f, sp.PeakTorqueNm / 650f, sp.TopSpeedKmh / 120f, sp.massKg / 4800f, sp.forwardSpeedsKmh.Length / 16f, sp.maxTowKg / 24000f };
+            float[] v = { sp.ratedPowerHp / 210f, sp.PeakTorqueNm / 860f, sp.TopSpeedKmh / 140f, sp.massKg / 4800f, sp.forwardSpeedsKmh.Length / 16f, sp.maxTowKg / 24000f };
             string[] t = { sp.ratedPowerHp + " HP", Mathf.RoundToInt(sp.PeakTorqueNm) + " Nm", sp.TopSpeedKmh + " km/h", sp.massKg + " kg",
                            sp.forwardSpeedsKmh.Length + "F + " + sp.reverseSpeedsKmh.Length + "R", Mathf.RoundToInt(sp.maxLiftKg) + " / " + Mathf.RoundToInt(sp.maxTowKg / 1000f) + " t" };
             for (int i = 0; i < srBars.Length; i++) { srBars[i].fillAmount = Mathf.Clamp01(v[i]); srBarVals[i].text = t[i]; srBars[i].color = sp.flagship ? new Color(1f, 0.75f, 0.2f) : UIFactory.Accent; }
@@ -124,30 +124,95 @@ namespace TractorSim
             FillShowroom(TractorCatalog.Get(TractorCatalog.Ids[showIdx]));
         }
 
-        // ---------------- map select ----------------
+        // ---------------- mission select (career) ----------------
+        Image[] mCards; Text[] mCardTitle, mCardInfo;
+        Text mdTitle, mdSub, mdStory, mdRules, mdReward, mdStatus, mdProgress;
+        Button mdStart; Text mdStartLabel;
+        int selMission;
+
         void BuildMapSelect(Transform root)
         {
-            mapSelect = UIFactory.Stretch(root, "MapSelect");
-            UIFactory.Img(mapSelect, new Color(0, 0, 0, 0.45f), null, true);
-            UIFactory.Label(mapSelect, "WHERE TO?", 56, new Vector2(0.5f, 1f), new Vector2(0, -110f), new Vector2(900f, 70f), TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
-            string[] titles = { "VILLAGE FARM", "HIMALAYAN CARGO ROUTE" };
-            string[] desc = {
-                "Proving ground, village and farm.\nHitch rotavator, cultivator, plough, seed drill or sprayer from the implement yard and work the field (paid per m²).\nCargo job: sugarcane to the mill.",
-                "3 km ghat road with hairpins, cliff drops, mud, rocks and a river ford.\nHitch a trolley at the depot, load 4.5 t of apples and deliver them up the mountain to Pahadgaon.\nHeavy, steep and dangerous – low gears!" };
-            Color[] cols = { new Color(0.25f, 0.45f, 0.18f, 0.95f), new Color(0.25f, 0.33f, 0.5f, 0.95f) };
-            for (int i = 0; i < 2; i++)
+            mapSelect = UIFactory.Stretch(root, "MissionSelect");
+            UIFactory.Img(mapSelect, new Color(0, 0, 0, 0.55f), null, true);
+            UIFactory.Label(mapSelect, "MISSIONS", 52, new Vector2(0f, 1f), new Vector2(330f, -70f), new Vector2(600f, 64f), TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
+            mdProgress = UIFactory.Label(mapSelect, "", 26, new Vector2(0f, 1f), new Vector2(760f, -74f), new Vector2(600f, 40f), TextAnchor.MiddleLeft, UIFactory.Accent, FontStyle.Bold);
+            int n = MissionCatalog.Count;
+            mCards = new Image[n]; mCardTitle = new Text[n]; mCardInfo = new Text[n];
+            const float W = 236f, H = 168f, Gap = 12f;
+            for (int i = 0; i < n; i++)
             {
-                int map = i;
-                var card = UIFactory.Rect(mapSelect, "Map" + i, new Vector2(0.5f, 0.5f), new Vector2(i == 0 ? -400f : 400f, -20f), new Vector2(720f, 600f));
-                UIFactory.Img(card, cols[i], ProcTex.RoundRect(), true);
-                UIFactory.Label(card, titles[i], 42, new Vector2(0.5f, 1f), new Vector2(0, -60f), new Vector2(660f, 60f), TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
-                UIFactory.Label(card, desc[i], 26, new Vector2(0.5f, 0.5f), new Vector2(0, 10f), new Vector2(640f, 320f), TextAnchor.UpperCenter, new Color(1, 1, 1, 0.92f));
-                UIFactory.MenuButton(card, "DRIVE", new Vector2(0.5f, 0f), new Vector2(0, 70f), new Vector2(320f, 90f), () => { if (onMapChosen != null) onMapChosen(map); }, new Color(0.75f, 0.42f, 0.05f, 0.95f), 40);
+                int idx = i;
+                int col = i % 5, row = i / 5;
+                var card = UIFactory.Rect(mapSelect, "Mission" + i, new Vector2(0f, 1f), new Vector2(40f + col * (W + Gap) + W * 0.5f, -140f - row * (H + Gap) - H * 0.5f), new Vector2(W, H));
+                mCards[i] = UIFactory.Img(card, UIFactory.ButtonColor, ProcTex.RoundRect(), true);
+                var b = card.gameObject.AddComponent<Button>();
+                b.targetGraphic = mCards[i];
+                b.onClick.AddListener(() => SelectMission(idx));
+                var d = MissionCatalog.All[i];
+                UIFactory.Label(card, (i + 1).ToString(), 40, new Vector2(0f, 1f), new Vector2(34f, -32f), new Vector2(60f, 50f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.35f), FontStyle.Bold);
+                UIFactory.Label(card, d.map == 1 ? "GHAT" : "GAON", 18, new Vector2(1f, 1f), new Vector2(-46f, -24f), new Vector2(80f, 26f), TextAnchor.MiddleRight, d.map == 1 ? new Color(0.55f, 0.75f, 1f) : new Color(0.6f, 0.9f, 0.45f), FontStyle.Bold);
+                mCardTitle[i] = UIFactory.Label(card, d.title, 23, new Vector2(0.5f, 0.5f), new Vector2(0f, 6f), new Vector2(W - 20f, 56f), TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+                mCardInfo[i] = UIFactory.Label(card, "", 19, new Vector2(0.5f, 0f), new Vector2(0f, 24f), new Vector2(W - 16f, 30f), TextAnchor.MiddleCenter, new Color(1, 1, 1, 0.8f));
             }
-            UIFactory.MenuButton(mapSelect, "BACK", new Vector2(1f, 1f), new Vector2(-130f, -70f), new Vector2(200f, 80f), () => { if (onMapBack != null) onMapBack(); }, null, 32);
+            // details
+            var det = UIFactory.Rect(mapSelect, "Details", new Vector2(1f, 0.5f), new Vector2(-330f, -20f), new Vector2(600f, 900f));
+            UIFactory.Img(det, UIFactory.PanelColor, ProcTex.RoundRect(), true);
+            mdTitle = UIFactory.Label(det, "", 42, new Vector2(0.5f, 1f), new Vector2(0f, -56f), new Vector2(560f, 56f), TextAnchor.MiddleLeft, UIFactory.Accent, FontStyle.Bold);
+            mdSub = UIFactory.Label(det, "", 26, new Vector2(0.5f, 1f), new Vector2(0f, -104f), new Vector2(560f, 36f), TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
+            mdStory = UIFactory.Label(det, "", 23, new Vector2(0.5f, 1f), new Vector2(0f, -250f), new Vector2(560f, 230f), TextAnchor.UpperLeft, new Color(1, 1, 1, 0.88f));
+            mdRules = UIFactory.Label(det, "", 22, new Vector2(0.5f, 1f), new Vector2(0f, -440f), new Vector2(560f, 130f), TextAnchor.UpperLeft, new Color(1f, 0.85f, 0.5f));
+            mdReward = UIFactory.Label(det, "", 34, new Vector2(0.5f, 1f), new Vector2(0f, -540f), new Vector2(560f, 46f), TextAnchor.MiddleLeft, new Color(0.45f, 0.95f, 0.45f), FontStyle.Bold);
+            mdStatus = UIFactory.Label(det, "", 22, new Vector2(0.5f, 1f), new Vector2(0f, -590f), new Vector2(560f, 40f), TextAnchor.MiddleLeft, new Color(1, 1, 1, 0.7f));
+            mdStart = UIFactory.MenuButton(det, "START", new Vector2(0.5f, 0f), new Vector2(0f, 220f), new Vector2(520f, 96f), () => { if (MissionCatalog.Unlocked(selMission) && onMissionChosen != null) onMissionChosen(selMission); }, new Color(0.75f, 0.42f, 0.05f, 0.95f), 42);
+            mdStartLabel = mdStart.GetComponentInChildren<Text>();
+            UIFactory.MenuButton(det, "FREE ROAM · GAON", new Vector2(0.5f, 0f), new Vector2(-135f, 90f), new Vector2(255f, 76f), () => { if (onMapChosen != null) onMapChosen(0); }, new Color(0.22f, 0.4f, 0.16f, 0.95f), 24);
+            UIFactory.MenuButton(det, "FREE ROAM · GHAT", new Vector2(0.5f, 0f), new Vector2(135f, 90f), new Vector2(255f, 76f), () => { if (onMapChosen != null) onMapChosen(1); }, new Color(0.22f, 0.3f, 0.48f, 0.95f), 24);
+            UIFactory.MenuButton(mapSelect, "BACK", new Vector2(0f, 0f), new Vector2(140f, 70f), new Vector2(220f, 80f), () => { if (onMapBack != null) onMapBack(); }, null, 32);
         }
 
-        public void ShowMapSelect(int current) { HideAll(); mapSelect.gameObject.SetActive(true); }
+        void SelectMission(int i)
+        {
+            selMission = i;
+            var d = MissionCatalog.All[i];
+            bool open = MissionCatalog.Unlocked(i);
+            mdTitle.text = (i + 1) + ". " + d.title;
+            mdSub.text = d.subtitle + "  ·  " + (d.map == 1 ? "Himalayan Ghat" : "Village Farm") + "  ·  " + new string('★', d.difficulty) + new string('☆', 5 - d.difficulty);
+            mdStory.text = d.story;
+            mdRules.text = d.RulesText();
+            mdReward.text = "Reward up to ₹" + Mathf.RoundToInt(d.reward * 1.3f).ToString("N0");
+            float best = MissionCatalog.Best(i);
+            mdStatus.text = !open ? "LOCKED – complete more missions to unlock" : MissionCatalog.Done(i) ? "✔ Completed  ·  best " + MissionRunner.FormatTime(best) : "Not completed yet";
+            mdStart.interactable = open;
+            if (mdStartLabel != null) mdStartLabel.text = open ? "START" : "LOCKED";
+            RefreshCards();
+        }
+
+        void RefreshCards()
+        {
+            for (int i = 0; i < mCards.Length; i++)
+            {
+                bool open = MissionCatalog.Unlocked(i), done = MissionCatalog.Done(i);
+                Color c = done ? new Color(0.16f, 0.36f, 0.16f, 0.95f) : open ? new Color(0.16f, 0.17f, 0.2f, 0.95f) : new Color(0.08f, 0.08f, 0.09f, 0.85f);
+                if (i == selMission) c = new Color(0.75f, 0.42f, 0.05f, 0.95f);
+                mCards[i].color = c;
+                mCardTitle[i].color = open ? Color.white : new Color(1, 1, 1, 0.35f);
+                var d = MissionCatalog.All[i];
+                mCardInfo[i].text = !open ? "LOCKED" : (done ? "✔ " : "") + "₹" + d.reward.ToString("N0") + "  ·  " + MissionRunner.FormatTime(d.timeLimitSec);
+            }
+            mdProgress.text = MissionCatalog.DoneCount() + " / " + MissionCatalog.Count + " completed  ·  ₹" + SaveSystem.Data.money.ToString("N0");
+        }
+
+        public void ShowMissionSelect()
+        {
+            HideAll();
+            mapSelect.gameObject.SetActive(true);
+            // select the first open, unfinished mission
+            int pick = 0;
+            for (int i = 0; i < MissionCatalog.Count; i++) if (MissionCatalog.Unlocked(i) && !MissionCatalog.Done(i)) { pick = i; break; }
+            SelectMission(pick);
+        }
+
+        public void ShowMapSelect(int current) { ShowMissionSelect(); }
 
         static float Max(float[] a) { float m = 0; foreach (var v in a) m = Mathf.Max(m, v); return m; }
 

@@ -1,86 +1,86 @@
 1. Start engine in neutral
-  t=  4.0s v=   0.0km/h rpm=  842 gear=N   eng=1.00 rack=0.12 run=True T=35C fuel=0.91L/h
+  t=  4.0s v=   0.0km/h rpm=  842 gear=N   eng=1.00 rack=0.11 run=True T=35C fuel=0.92L/h
   PASS idles near 850 rpm
 2. Start refused in gear without clutch
   PASS starter interlock: Press the clutch or select Neutral to start
 3. Manual: L1 gentle clutch release pulls away
   PASS select gear 1 with clutch
-  t= 11.3s v=   1.7km/h rpm= 1262 gear=L1  eng=1.00 rack=0.14 run=True T=44C fuel=1.65L/h
+  t= 11.3s v=   1.9km/h rpm= 1294 gear=L1  eng=1.00 rack=0.13 run=True T=43C fuel=1.71L/h
   PASS moving in L1, engine alive
 4. Manual: dump clutch in H4 at idle -> stall
-  t=  8.2s v=   0.5km/h rpm=   34 gear=H4  eng=1.00 rack=0.00 run=False T=37C fuel=0.00L/h
+  t=  8.2s v=   0.0km/h rpm=    1 gear=H4  eng=1.00 rack=0.00 run=False T=37C fuel=0.00L/h
   PASS engine stalled (Engine stalled!)
 5. Manual: shift without clutch -> grind/refused
   PASS refused: Gears grinding ? press the clutch!
 6. Manual: drive up through all gears to top speed
-  -> t= 13.2s v=   4.4km/h rpm= 2233 gear=L2  eng=1.00 rack=0.29 run=True T=50C fuel=3.73L/h
-  -> t= 18.7s v=   6.0km/h rpm= 2232 gear=L3  eng=1.00 rack=0.30 run=True T=58C fuel=3.82L/h
-  -> t= 24.2s v=   8.9km/h rpm= 2230 gear=L4  eng=1.00 rack=0.32 run=True T=67C fuel=4.01L/h
-  -> t= 36.7s v=  11.3km/h rpm= 2216 gear=H1  eng=1.00 rack=0.44 run=True T=82C fuel=5.19L/h
-  -> t= 42.2s v=  16.0km/h rpm= 2212 gear=H2  eng=1.00 rack=0.48 run=True T=86C fuel=5.53L/h
-  -> t= 47.7s v=  20.8km/h rpm= 2175 gear=H3  eng=1.00 rack=0.83 run=True T=87C fuel=8.96L/h
-  -> t= 53.2s v=  26.4km/h rpm= 1852 gear=H4  eng=1.00 rack=1.00 run=True T=88C fuel=10.81L/h
-  t= 68.2s v=  32.2km/h rpm= 2212 gear=H4  eng=1.00 rack=0.48 run=True T=87C fuel=5.51L/h
-  PASS top speed in H4 ~31 km/h
+  -> t= 13.2s v=   5.2km/h rpm= 2339 gear=L2  eng=1.00 rack=0.28 run=True T=50C fuel=4.02L/h
+  -> t= 18.7s v=   7.1km/h rpm= 2337 gear=L3  eng=1.00 rack=0.29 run=True T=59C fuel=4.13L/h
+  -> t= 24.2s v=  10.3km/h rpm= 2335 gear=L4  eng=1.00 rack=0.31 run=True T=67C fuel=4.37L/h
+  -> t= 36.7s v=  14.3km/h rpm= 2300 gear=H1  eng=1.00 rack=0.65 run=True T=84C fuel=7.90L/h
+  -> t= 42.2s v=  20.6km/h rpm= 2227 gear=H2  eng=1.00 rack=1.00 run=True T=87C fuel=12.06L/h
+  -> t= 47.7s v=  27.2km/h rpm= 1931 gear=H3  eng=1.00 rack=1.00 run=True T=88C fuel=11.86L/h
+  -> t= 53.2s v=  36.9km/h rpm= 1671 gear=H4  eng=1.00 rack=1.00 run=True T=89C fuel=10.91L/h
+  t= 68.2s v=  51.7km/h rpm= 2298 gear=H4  eng=1.00 rack=0.65 run=True T=88C fuel=7.85L/h
+  PASS top speed in H4 ~50 km/h
   PASS in H4
 7. Engine braking: lift off in H4
-  t= 72.2s v=  25.4km/h rpm= 1728 gear=H4  eng=1.00 rack=0.00 run=True T=85C fuel=0.91L/h
+  t= 72.2s v=  44.0km/h rpm= 1933 gear=H4  eng=1.00 rack=0.00 run=True T=85C fuel=1.02L/h
   PASS slows on engine braking, engine still running
 8. Brake distance from top speed
-  from 32.2 km/h stopped in 6.7 m
+  from 51.7 km/h stopped in 17.0 m
   PASS plausible stopping distance
 9. Automatic: full throttle on flat
-    shift -> t=  5.0s v=   0.0km/h rpm=  842 gear=N   eng=0.00 rack=0.12 run=True T=36C fuel=0.91L/h
-    shift -> t=  5.3s v=   0.0km/h rpm= 1134 gear=L2  eng=0.00 rack=1.00 run=True T=37C fuel=6.81L/h
-    shift -> t=  6.6s v=   4.0km/h rpm= 2054 gear=L3  eng=0.00 rack=0.00 run=True T=41C fuel=1.09L/h
-    shift -> t=  7.7s v=   5.8km/h rpm= 2164 gear=L4  eng=0.00 rack=0.00 run=True T=43C fuel=1.15L/h
-    shift -> t=  8.9s v=   8.6km/h rpm= 2158 gear=H1  eng=0.00 rack=0.00 run=True T=45C fuel=1.14L/h
-    shift -> t= 10.0s v=  11.1km/h rpm= 2152 gear=H2  eng=0.00 rack=0.00 run=True T=47C fuel=1.14L/h
-    shift -> t= 11.1s v=  15.2km/h rpm= 2065 gear=H3  eng=0.00 rack=0.00 run=True T=49C fuel=1.09L/h
-    shift -> t= 12.7s v=  20.6km/h rpm= 2091 gear=H4  eng=0.00 rack=0.00 run=True T=54C fuel=1.11L/h
-  t= 50.0s v=  32.2km/h rpm= 2212 gear=H4  eng=1.00 rack=0.48 run=True T=87C fuel=5.51L/h
-  PASS auto reaches H4 ~30 km/h
+    shift -> t=  5.0s v=   0.0km/h rpm=  842 gear=N   eng=0.00 rack=0.11 run=True T=36C fuel=0.92L/h
+    shift -> t=  5.3s v=   0.0km/h rpm= 1144 gear=L2  eng=0.00 rack=1.00 run=True T=37C fuel=7.09L/h
+    shift -> t=  6.6s v=   4.5km/h rpm= 2068 gear=L3  eng=0.00 rack=0.00 run=True T=40C fuel=1.09L/h
+    shift -> t=  7.7s v=   6.8km/h rpm= 2265 gear=L4  eng=0.00 rack=0.00 run=True T=43C fuel=1.20L/h
+    shift -> t=  8.8s v=  10.1km/h rpm= 2258 gear=H1  eng=0.00 rack=0.00 run=True T=45C fuel=1.20L/h
+    shift -> t=  9.9s v=  14.1km/h rpm= 2217 gear=H2  eng=0.00 rack=0.00 run=True T=47C fuel=1.17L/h
+    shift -> t= 11.6s v=  21.1km/h rpm= 2195 gear=H3  eng=0.00 rack=0.00 run=True T=52C fuel=1.16L/h
+    shift -> t= 15.0s v=  32.2km/h rpm= 2190 gear=H4  eng=0.00 rack=0.00 run=True T=63C fuel=1.16L/h
+  t= 50.0s v=  51.7km/h rpm= 2298 gear=H4  eng=1.00 rack=0.65 run=True T=88C fuel=7.85L/h
+  PASS auto reaches H4 top speed
   PASS no stall in auto
 10. Automatic: brake to stop -> clutch frees, engine idles
-  t= 58.0s v=   0.0km/h rpm=  842 gear=L2  eng=0.00 rack=0.12 run=True T=86C fuel=0.91L/h
+  t= 58.0s v=   0.0km/h rpm=  842 gear=L2  eng=0.00 rack=0.11 run=True T=86C fuel=0.92L/h
   PASS stopped, idling, clutch out
 11. Automatic: reverse selection
-  t= 66.0s v=  -3.2km/h rpm= 1682 gear=RL  eng=1.00 rack=0.17 run=True T=86C fuel=2.48L/h
+  t= 66.0s v=  -3.5km/h rpm= 1745 gear=RL  eng=1.00 rack=0.17 run=True T=86C fuel=2.63L/h
   PASS moving backwards in reverse
-  t= 76.0s v=   3.3km/h rpm= 1682 gear=L2  eng=1.00 rack=0.17 run=True T=85C fuel=2.49L/h
+  t= 76.0s v=   3.8km/h rpm= 1745 gear=L2  eng=1.00 rack=0.17 run=True T=86C fuel=2.65L/h
   PASS auto braked, changed to forward and drove off
 12. Hill 12 deg, empty, automatic
-  t= 35.0s v=  18.1km/h rpm= 1956 gear=H3  eng=1.00 rack=1.00 run=True T=93C fuel=11.01L/h
+  t= 35.0s v=  19.6km/h rpm= 2178 gear=H2  eng=1.00 rack=1.00 run=True T=93C fuel=12.19L/h
   PASS climbs 12 deg
 13. Same hill with 6 t loaded trolley
-  t= 35.0s v=   3.1km/h rpm= 1731 gear=L3  eng=1.00 rack=1.00 run=True T=95C fuel=10.43L/h
-  PASS much slower when loaded (3.1 vs 18.1 km/h)
+  t= 35.0s v=   3.3km/h rpm= 1619 gear=L3  eng=1.00 rack=1.00 run=True T=96C fuel=10.62L/h
+  PASS much slower when loaded (3.3 vs 19.6 km/h)
 14. Mud (mu 0.35, crr 0.15) with load: struggles
-  t= 25.0s v=   0.2km/h rpm= 2205 gear=L2  eng=1.00 rack=0.54 run=True T=80C fuel=6.11L/h wheel slip speed=4.4
+  t= 25.0s v=   0.2km/h rpm= 2309 gear=L2  eng=1.00 rack=0.55 run=True T=82C fuel=6.80L/h wheel slip speed=5.1
   PASS rear wheels spinning faster than ground speed
 15. Manual: run warm at full load 3 minutes
-  t=185.0s v=  10.5km/h rpm= 2162 gear=H1  eng=1.00 rack=0.93 run=True T=90C fuel=10.03L/h
+  t=185.0s v=  13.3km/h rpm= 2226 gear=H1  eng=1.00 rack=1.00 run=True T=95C fuel=12.03L/h
   PASS coolant temp in working range
 16. Every tractor in the showroom: automatic top speed on flat asphalt
-  GOLU CHAUDHARY GC-35       35 HP  top 29.3 km/h (spec 28)  gear H4  rpm 2208
+  GOLU CHAUDHARY GC-35       39 HP  top 46.8 km/h (spec 45)  gear H4  rpm 2305
   PASS golu35 reaches ~its rated top speed
-  ANSHU SINGH AS-50          50 HP  top 35.7 km/h (spec 34)  gear H4  rpm 2111
+  ANSHU SINGH AS-50          55 HP  top 57.2 km/h (spec 55)  gear H4  rpm 2202
   PASS anshu50 reaches ~its rated top speed
-  HALDHAR 47 DI              47 HP  top 32.4 km/h (spec 30.8)  gear H4  rpm 2221
+  HALDHAR 50 DI              50 HP  top 52.1 km/h (spec 50)  gear H4  rpm 2311
   PASS haldhar47 reaches ~its rated top speed
-  BHARAT VEER 60 4WD         60 HP  top 40.1 km/h (spec 38)  gear H4  rpm 2221
+  BHARAT VEER 75 4WD         75 HP  top 67.9 km/h (spec 65)  gear H4  rpm 2310
   PASS bharatveer60 reaches ~its rated top speed
-  MOHIT SINGH MS-150 TURBO   150 HP  top 122.6 km/h (spec 120)  gear H8  rpm 2266
+  MOHIT SINGH MS-210 TURBO   210 HP  top 143.3 km/h (spec 140)  gear H8  rpm 2271
   PASS mohit150 reaches ~its rated top speed
-  PASS Mohit Singh does 110+ km/h (123)
+  PASS Mohit Singh does 130+ km/h (143)
   PASS Mohit Singh is the fastest tractor
-17. Mohit Singh: 0-100 km/h and braking from 120
-  0-100 in 42.9 s, now 123 km/h
-  stopped in 59 m
+17. Mohit Singh: 0-100 km/h and braking from top speed
+  0-100 in 30.1 s, now 143 km/h
+  stopped in 80 m
   PASS reaches 100 km/h
   PASS stops from top speed in a plausible distance
 18. 4WD vs 2WD: muddy 6 deg slope with a 2 t trolley
-  2WD Anshu Singh: 0.2 km/h   4WD Bharat Veer: 11.2 km/h
+  2WD Anshu Singh: 0.2 km/h   4WD Bharat Veer: 13.9 km/h
   PASS 4WD climbs the muddy slope better
 
 ALL PASS

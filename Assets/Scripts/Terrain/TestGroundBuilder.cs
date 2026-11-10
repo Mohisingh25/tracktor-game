@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace TractorSim
@@ -11,7 +12,6 @@ namespace TractorSim
     {
         public static Vector3 SpawnPoint = new Vector3(0f, 0.4f, -25f);
         public static Quaternion SpawnRotation = Quaternion.identity;
-        public static CargoMission Mission;
         public static FieldArea Farm;
 
         static Transform root;
@@ -21,6 +21,7 @@ namespace TractorSim
         {
             root = new GameObject("TestGround").transform;
             SurfaceZone.ClearCache();
+            WorldAnchors.Clear(root);
             Materials();
 
             // ---- base ground (grass) ----
@@ -96,6 +97,7 @@ namespace TractorSim
             var fieldGo = Slab("Field", new Vector3(0f, -0.03f, 255f), new Vector3(70f, 0.1f, 40f), fieldM, SurfaceKind.Field);
             Farm = fieldGo.AddComponent<FieldArea>();
             Farm.Init();
+            WorldAnchors.Field = Farm;
             Crops(new Vector3(-55f, 0f, 255f), 30f, 36f, true);   // sugarcane
             Crops(new Vector3(55f, 0f, 255f), 30f, 36f, false);   // wheat
             Sign(new Vector3(8f, 0, 230f), "FARM FIELD");
@@ -105,6 +107,8 @@ namespace TractorSim
             PolesAlongRoad();
             ImplementYard();
             SugarMillRun();
+            MissionPlaces();
+            WorldAnchors.Spawns["village"] = new SpawnPoint(SpawnPoint, SpawnRotation);
             return root;
         }
 
@@ -146,20 +150,104 @@ namespace TractorSim
             Sign(new Vector3(-36f, 0, -28f), "SUGAR MILL\nTIP here");
             MeshUtil.CombineByMaterial(vis.gameObject);
 
-            var mission = m.gameObject.AddComponent<CargoMission>();
-            mission.title = "Sugarcane to the mill";
-            mission.cargo = CargoType.Sugarcane;
-            mission.targetKg = 3000f; mission.basePay = 3500; mission.parTimeSec = 360f;
-            mission.loadZone = load; mission.deliveryZone = drop;
-            Vector3[] cps = { new Vector3(0, 0, 200f), new Vector3(0, 0, 110f), new Vector3(0, 0, 40f), new Vector3(-38f, 0, 16f), new Vector3(-40f, 0, -12f) };
-            float[] yaws = { 180f, 180f, 180f, 270f, 180f };
-            for (int i = 0; i < cps.Length; i++)
+            WorldAnchors.Zones["cane_bay"] = load;
+            WorldAnchors.Zones["mill"] = drop;
+        }
+
+        // ------------------------------------------------------------------ mission places & routes
+        static Zone Yard(Transform parent, string id, Vector3 c, float yaw, float w, float l, Color col, Material pad)
+        {
+            var z = Zone.Create(parent, id, c, new Vector3(w, 4f, l), yaw);
+            if (pad != null) Slab(id + "_pad", c + Vector3.down * 0.03f, yaw == 0f ? new Vector3(w + 1f, 0.1f, l + 1f) : new Vector3(l + 1f, 0.1f, w + 1f), pad, SurfaceKind.Asphalt);
+            var vis = new GameObject("Mark").transform; vis.SetParent(parent, false);
+            var m = MatLib.Emissive(col, col * 0.35f);
+            var q = Quaternion.Euler(0, yaw, 0);
+            for (int s = -1; s <= 1; s += 2)
             {
-                var z = Zone.Create(m, "CP" + (i + 1), cps[i] + Vector3.down * 0.5f, new Vector3(i < 3 ? 12f : 10f, 6f, 4f), yaws[i]);
-                mission.checkpoints.Add(z);
-                mission.checkpointMarkers.Add(WorldProps.Gate(m, cps[i], yaws[i], i < 3 ? 10f : 9f, "CHECKPOINT " + (i + 1)));
+                MeshUtil.Part(vis, PrimitiveType.Cube, c + q * new Vector3(s * w * 0.5f, 0.06f, 0), new Vector3(0.2f, 0.05f, l), new Vector3(0, yaw, 0), m, "Line");
+                MeshUtil.Part(vis, PrimitiveType.Cube, c + q * new Vector3(0, 0.06f, s * l * 0.5f), new Vector3(w, 0.05f, 0.2f), new Vector3(0, yaw, 0), m, "Line");
             }
-            Mission = mission;
+            WorldAnchors.Zones[id] = z;
+            return z;
+        }
+
+        static void MissionPlaces()
+        {
+            var m = new GameObject("MissionPlaces").transform; m.SetParent(root, false);
+            var vis = new GameObject("Visual").transform; vis.SetParent(m, false);
+            var pad = MatLib.Opaque(new Color(0.6f, 0.6f, 0.58f), 0.1f, 0f);
+
+            // ---- brick kiln (bhatta) east of the road, north of the rock garden ----
+            Slab("Track_Kiln", new Vector3(28f, -0.035f, 212f), new Vector3(46f, 0.1f, 6f), dirtM, SurfaceKind.Dirt);
+            Yard(m, "kiln", new Vector3(56f, 0f, 212f), 90f, 6f, 12f, new Color(1f, 0.85f, 0.1f), null);
+            Slab("KilnGround", new Vector3(66f, -0.032f, 212f), new Vector3(36f, 0.1f, 26f), MatLib.Opaque(new Color(0.55f, 0.36f, 0.24f), 0.05f, 0f), SurfaceKind.Dirt);
+            MeshUtil.Part(vis, PrimitiveType.Cylinder, new Vector3(78f, 9f, 222f), new Vector3(2.4f, 9f, 2.4f), Vector3.zero, brickM, "KilnChimney");
+            WorldProps.Capsule(m, new Vector3(78f, 9f, 222f), 1.2f, 18f);
+            MeshUtil.Part(vis, PrimitiveType.Cube, new Vector3(76f, 1.5f, 206f), new Vector3(12f, 3f, 8f), Vector3.zero, brickM, "KilnBody");
+            Collider(m, new Vector3(76f, 1.5f, 206f), new Vector3(12f, 3f, 8f));
+            for (int i = 0; i < 6; i++)
+            {
+                var stack = new Vector3(56f + (i % 3) * 3.2f, 0.6f, 219.5f + (i / 3) * 2.4f);
+                MeshUtil.Part(vis, PrimitiveType.Cube, stack, new Vector3(2.4f, 1.2f, 1.6f), Vector3.zero, brickM, "BrickStack");
+                Collider(m, stack, new Vector3(2.4f, 1.2f, 1.6f));
+            }
+            Sign(new Vector3(40f, 0, 205f), "EENT BHATTA\nbrick kiln · LOAD");
+
+            // ---- river-sand pit west of the loop track ----
+            Slab("Track_Sand", new Vector3(-90f, -0.035f, 178f), new Vector3(26f, 0.1f, 6f), dirtM, SurfaceKind.Dirt);
+            Slab("SandPit", new Vector3(-112f, -0.032f, 178f), new Vector3(24f, 0.1f, 24f), sandM, SurfaceKind.Sand);
+            Yard(m, "sand_pit", new Vector3(-108f, 0f, 178f), 90f, 6f, 12f, new Color(1f, 0.85f, 0.1f), null);
+            for (int i = 0; i < 4; i++)
+            {
+                var heap = new Vector3(-114f + (i % 2) * 7f, 0f, 188.5f + (i / 2) * 3f);
+                var h = MeshUtil.Part(vis, PrimitiveType.Sphere, heap, new Vector3(5f, 2.4f, 4f), Vector3.zero, sandM, "SandHeap");
+                Collider(m, heap + Vector3.up * 0.4f, new Vector3(3.6f, 1.2f, 2.8f));
+            }
+            Sign(new Vector3(-96f, 0, 170f), "RET KHADAN\nsand pit · LOAD");
+
+            // ---- village delivery yard ----
+            Yard(m, "village_yard", new Vector3(-30f, 0f, -4f), 0f, 9f, 12f, new Color(0.2f, 0.85f, 0.3f), pad);
+            Sign(new Vector3(-36f, 0, 4f), "GAON YARD\nunload here");
+
+            // ---- narrow parking shed for the reversing test ----
+            Slab("Track_Shed", new Vector3(28f, -0.035f, 62f), new Vector3(48f, 0.1f, 6f), dirtM, SurfaceKind.Dirt);
+            Slab("ShedFloor", new Vector3(63f, -0.032f, 62f), new Vector3(14f, 0.1f, 6f), concreteM, SurfaceKind.Asphalt);
+            var tin = MatLib.Opaque(new Color(0.55f, 0.58f, 0.6f), 0.6f, 0.7f);
+            for (int s = -1; s <= 1; s += 2)
+            {
+                var wall = new Vector3(64f, 1.6f, 62f + s * 2.75f);
+                MeshUtil.Part(vis, PrimitiveType.Cube, wall, new Vector3(12f, 3.2f, 0.25f), Vector3.zero, brickM, "ShedWall");
+                Collider(m, wall, new Vector3(12f, 3.2f, 0.25f));
+            }
+            MeshUtil.Part(vis, PrimitiveType.Cube, new Vector3(70.1f, 1.6f, 62f), new Vector3(0.25f, 3.2f, 5.75f), Vector3.zero, brickM, "ShedBack");
+            Collider(m, new Vector3(70.1f, 1.6f, 62f), new Vector3(0.25f, 3.2f, 5.75f));
+            MeshUtil.Part(vis, PrimitiveType.Cube, new Vector3(64f, 3.3f, 62f), new Vector3(12.4f, 0.12f, 6.2f), Vector3.zero, tin, "ShedRoof");
+            var bay = Zone.Create(m, "shed_bay", new Vector3(64.5f, 0f, 62f), new Vector3(5.2f, 4f, 11f), 90f);
+            WorldAnchors.Zones["shed_bay"] = bay;
+            Sign(new Vector3(52f, 0, 68f), "TROLLEY SHED\nreverse in");
+
+            MeshUtil.CombineByMaterial(vis.gameObject);
+
+            // ---- routes (gates) ----
+            WorldAnchors.Routes["loop"] = new List<Waypoint> {
+                new Waypoint(new Vector3(0, 0, 60f), 0f, 10f), new Waypoint(new Vector3(0, 0, 150f), 0f, 10f), new Waypoint(new Vector3(-30f, 0, 165f), 270f, 9f),
+                new Waypoint(new Vector3(-75f, 0, 155f), 180f, 9f), new Waypoint(new Vector3(-75f, 0, 110f), 180f, 9f), new Waypoint(new Vector3(-75f, 0, 50f), 180f, 9f),
+                new Waypoint(new Vector3(-40f, 0, 16f), 90f, 9f), new Waypoint(new Vector3(0, 0, -15f), 180f, 10f) };
+            WorldAnchors.Routes["mud"] = new List<Waypoint> {
+                new Waypoint(new Vector3(-22f, 0, 30f), 270f, 9f), new Waypoint(new Vector3(-48f, 0, 30f), 270f, 9f), new Waypoint(new Vector3(-64f, 0, 44f), 0f, 9f),
+                new Waypoint(new Vector3(-50f, 0, 56f), 90f, 9f), new Waypoint(new Vector3(-50f, 0, 92f), 0f, 10f), new Waypoint(new Vector3(-20f, 0, 100f), 90f, 9f) };
+            WorldAnchors.Routes["hills"] = new List<Waypoint> {
+                new Waypoint(new Vector3(25f, 0, 30f), 90f, 9f), new Waypoint(new Vector3(104f, 0, 30f), 90f, 10f), new Waypoint(new Vector3(104f, 0, 100f), 0f, 10f),
+                new Waypoint(new Vector3(30f, 0, 100f), 270f, 10f), new Waypoint(new Vector3(30f, 0, 140f), 0f, 10f), new Waypoint(new Vector3(58f, 0, 165f), 90f, 12f), new Waypoint(new Vector3(88f, 0, 165f), 90f, 10f) };
+            WorldAnchors.Routes["cane_to_mill"] = new List<Waypoint> {
+                new Waypoint(new Vector3(0, 0, 200f), 180f, 10f), new Waypoint(new Vector3(0, 0, 110f), 180f, 10f), new Waypoint(new Vector3(0, 0, 40f), 180f, 10f),
+                new Waypoint(new Vector3(-38f, 0, 16f), 270f, 9f), new Waypoint(new Vector3(-40f, 0, -12f), 180f, 9f) };
+            WorldAnchors.Routes["kiln_to_village"] = new List<Waypoint> {
+                new Waypoint(new Vector3(25f, 0, 212f), 270f, 9f), new Waypoint(new Vector3(0, 0, 150f), 180f, 10f), new Waypoint(new Vector3(0, 0, 60f), 180f, 10f),
+                new Waypoint(new Vector3(-20f, 0, 16f), 270f, 9f) };
+            WorldAnchors.Routes["sand_to_village"] = new List<Waypoint> {
+                new Waypoint(new Vector3(-80f, 0, 178f), 90f, 9f), new Waypoint(new Vector3(-75f, 0, 150f), 180f, 9f), new Waypoint(new Vector3(-75f, 0, 110f), 180f, 9f),
+                new Waypoint(new Vector3(-75f, 0, 50f), 180f, 9f), new Waypoint(new Vector3(-50f, 0, 16f), 90f, 9f) };
         }
 
         static float EdgeFade(float x, float z, float hx, float hz, float band)

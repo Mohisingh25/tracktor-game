@@ -26,6 +26,8 @@ namespace TractorSim.EditorTools
             ConfigurePlayer();
             CreateMaterials();
             CreateArtCatalog();
+            try { TractorFbxImporter.Process(); }
+            catch (System.Exception e) { Debug.LogWarning("[TractorSim] FBX tractor import failed, procedural tractor used: " + e); }
             // IncludeShaders() disabled: forcing hidden built-in shaders into the build crashed the shader compiler in CI.
             PostFxSetup.CreateCameraRig();
             CreateScene();

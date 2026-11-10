@@ -27,7 +27,7 @@ namespace TractorSim
         public System.Action onPause, onCamera, onRecover;
 
         AttachmentManager hitch;
-        CargoMission mission;
+        MissionRunner mission;
         TouchButton btnAttach, btnLift, btnPto, btnTip, btnLoad;
         RectTransform missionPanel, navArrow;
         Text missionTitle, missionText, navText, moneyText;
@@ -40,7 +40,7 @@ namespace TractorSim
             t.OnMessage += Toast;
         }
 
-        public void SetMission(CargoMission m)
+        public void SetMission(MissionRunner m)
         {
             mission = m;
             if (missionPanel != null) missionPanel.gameObject.SetActive(m != null);
@@ -134,7 +134,7 @@ namespace TractorSim
         float SpeedoMax()
         {
             float top = tractor.Spec.TopSpeedKmh;
-            float max = top > 60f ? 140f : 40f;
+            float max = top > 70f ? 160f : 80f;
             if (max != lastSpeedoMax && speedTicks != null)
             {
                 lastSpeedoMax = max;
@@ -420,12 +420,19 @@ namespace TractorSim
             if (mission == null || missionPanel == null) return;
             missionPanel.gameObject.SetActive(true);
             missionTitle.text = mission.title;
-            string extra = "";
             var tr = hitch != null ? hitch.CurrentTrolley : null;
-            if (mission.Step == MissionStep.Deliver || mission.Step == MissionStep.Unload)
-                extra = "\nTime " + CargoMission.FormatTime(mission.Timer) + "   Cargo " + (tr != null ? Mathf.RoundToInt(tr.CargoKg) : 0) + " / " + Mathf.RoundToInt(mission.LoadedKg) + " kg";
-            if (mission.Step == MissionStep.Complete) missionText.text = "Delivered " + Mathf.RoundToInt(mission.DeliveredKg) + " kg in " + CargoMission.FormatTime(mission.Timer) + "\nRestart from pause for another run";
-            else if (mission.Step == MissionStep.Failed) missionText.text = "Failed – restart from the pause menu";
+            var d = mission.def;
+            float left = mission.TimeLeft;
+            string clock = (left < 60f && mission.Active ? "<color=#ff5040>" : "") + "TIME " + MissionRunner.FormatTime(left) + (left < 60f && mission.Active ? "</color>" : "");
+            string extra = "\n" + clock;
+            if ((mission.Step == MissionStep.Deliver || mission.Step == MissionStep.Unload) && tr != null)
+            {
+                extra += "   Cargo " + Mathf.RoundToInt(tr.CargoKg) + " / " + Mathf.RoundToInt(mission.LoadedKg) + " kg";
+                if (d.maxSpill >= 0f && mission.LoadedKg > 0f) extra += "   Spill " + Mathf.RoundToInt(100f * tr.Spilled / mission.LoadedKg) + "/" + Mathf.RoundToInt(d.maxSpill * 100f) + "%";
+            }
+            if (d.maxDamage >= 0f) extra += "   Damage " + Mathf.RoundToInt(mission.DamageAdded) + "/" + Mathf.RoundToInt(d.maxDamage) + "%";
+            if (d.speedLimitKmh > 0f) extra += "   Limit " + Mathf.RoundToInt(d.speedLimitKmh) + " km/h";
+            if (mission.Step == MissionStep.Complete || mission.Step == MissionStep.Failed) missionText.text = mission.ResultText + "\nPause menu → Restart, or choose another mission";
             else missionText.text = mission.Objective + extra;
             // direction arrow relative to the camera
             var cam = Camera.main;

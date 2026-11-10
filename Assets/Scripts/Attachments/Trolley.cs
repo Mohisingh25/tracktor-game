@@ -50,6 +50,14 @@ namespace TractorSim
             float bedY = 1.05f;
             float axleZ = tandem ? -L * 0.55f : -L * 0.58f;   // bed starts 1.5 m behind the hitch eye
             float bedFront = -1.4f;
+            // the user's FBX tractor comes with a single-axle trolley: use its exact dimensions
+            var rig = !tandem ? TractorRigInfo.Load() : null;
+            GameObject rigPrefab = rig != null && rig.hasTrolley ? TractorRigInfo.TrolleyPrefab() : null;
+            if (rigPrefab != null)
+            {
+                L = rig.trolleyBedLength; W = rig.trolleyBedWidth; H = rig.trolleySideHeight;
+                bedY = rig.trolleyFloorY; bedFront = rig.trolleyBedFrontZ; axleZ = rig.trolleyAxleZ;
+            }
             var red = MatLib.Opaque(new Color(0.62f, 0.12f, 0.08f), 0.4f, 0.2f);
             var blue = MatLib.Opaque(new Color(0.15f, 0.3f, 0.55f), 0.4f, 0.2f);
             var dark = MatLib.Opaque(new Color(0.13f, 0.13f, 0.14f), 0.35f, 0.5f);
@@ -103,6 +111,7 @@ namespace TractorSim
             // wheels
             float r = tandem ? 0.48f : 0.55f, wW = 0.3f;
             float tr = 0.98f;
+            if (rigPrefab != null) { r = rig.trolleyWheelRadius; tr = rig.trolleyTrack * 0.5f; }
             var axles = tandem ? new[] { axleZ + 0.6f, axleZ - 0.6f } : new[] { axleZ };
             t.wheels = new TWheel[axles.Length * 2];
             int idx = 0;
@@ -127,18 +136,36 @@ namespace TractorSim
 
             t.hitchPoint = new GameObject("Hitch").transform; t.hitchPoint.SetParent(go.transform, false); t.hitchPoint.localPosition = new Vector3(0, 0.5f, 0f);
             t.workPoint = t.hitchPoint;
-            t.bedLength = L; t.axleZ = axleZ; t.bedHeight = H;
+            t.bedLength = L; t.axleZ = axleZ; t.bedHeight = H; t.bedWidth = W;
+            if (rigPrefab != null) ApplyRigTrolley(t, vis, rigPrefab);
             ApplyArtTrolley(t, vis);
             return t;
         }
 
-        float bedLength, axleZ, bedHeight;
+        float bedLength, axleZ, bedHeight, bedWidth = 2f;
 
         static void AddCol(Transform parent, Vector3 c, Vector3 s)
         {
             var g = new GameObject("Col"); g.transform.SetParent(parent, false);
             g.layer = TractorBuilder.TractorLayer;   // vehicles' wheel casts ignore each other's bodies
             var b = g.AddComponent<BoxCollider>(); b.center = c; b.size = s;
+        }
+
+        /// <summary>Swap the procedural trolley visuals for the FBX trolley (bed tips, wheels spin, cargo heap stays).</summary>
+        static void ApplyRigTrolley(Trolley t, Transform vis, GameObject prefab)
+        {
+            foreach (var r in vis.GetComponentsInChildren<Renderer>(true)) if (r.transform != t.cargoVis) r.enabled = false;
+            foreach (var w in t.wheels) if (w.vis != null) foreach (var r in w.vis.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+            var m = Object.Instantiate(prefab, t.transform);
+            m.name = "RigModel";
+            m.transform.localPosition = new Vector3(0f, 0.5f, 0f);      // prefab origin = hitch eye, 0.5 m above ground
+            m.transform.localRotation = Quaternion.identity;
+            m.transform.localScale = Vector3.one;
+            foreach (var c in m.GetComponentsInChildren<Collider>(true)) Object.Destroy(c);
+            var rigBed = m.transform.Find("Bed");
+            if (rigBed != null) rigBed.SetParent(t.bed, true);           // tips with the hydraulic bed
+            var rigWheels = m.transform.Find("Wheels");
+            if (rigWheels != null && t.wheels.Length > 0 && t.wheels[0].vis != null) rigWheels.SetParent(t.wheels[0].vis, true);  // spins about the axle line
         }
 
         static void ApplyArtTrolley(Trolley t, Transform vis)
@@ -227,7 +254,7 @@ namespace TractorSim
                 cargoVis.gameObject.SetActive(any);
                 if (any)
                 {
-                    cargoVis.localScale = new Vector3(1.9f, Mathf.Max(0.02f, heapH), bedLength - 0.1f);
+                    cargoVis.localScale = new Vector3(bedWidth - 0.1f, Mathf.Max(0.02f, heapH), bedLength - 0.1f);
                     cargoVis.localPosition = new Vector3(0, 0.04f + heapH * 0.5f, -bedLength * 0.5f);
                     cargoRenderer.sharedMaterial = MatLib.Opaque(CargoColor(Cargo), Cargo == CargoType.Apples ? 0.5f : 0.08f, 0f,
                         ProcTex.Ground("cargo" + Cargo, CargoColor(Cargo) * 0.8f, CargoColor(Cargo) * 1.15f, Cargo == CargoType.Apples ? 22f : 12f, 0.4f, (int)Cargo + 50), new Vector2(3f, 6f));
@@ -238,7 +265,7 @@ namespace TractorSim
         float HeapHeight()
         {
             float vol = CargoKg / Density(Cargo);              // m^3
-            float area = 1.9f * (bedLength - 0.1f);
+            float area = (bedWidth - 0.1f) * (bedLength - 0.1f);
             return Mathf.Min(vol / area, bedHeight + 0.9f);      // heaped above the sides when light & bulky
         }
 

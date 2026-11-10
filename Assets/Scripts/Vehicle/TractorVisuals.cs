@@ -14,6 +14,7 @@ namespace TractorSim
         public Transform cockpitEye, hitchCam, frontCam;
         public Transform bodyRoot, driver;
         public Transform[] artWheels;          // wheels of an imported 3D model (optional)
+        public bool artWheelsFollow;           // art wheels also follow suspension travel (FBX rig)
         Quaternion[] artWheelBase;
 
         TractorController ctrl;
@@ -54,7 +55,12 @@ namespace TractorSim
                 wheelRoots[i].position = c;
                 wheelRoots[i].rotation = transform.rotation * Quaternion.Euler(0f, w.steerDeg, 0f);
                 wheelSpin[i].localRotation = Quaternion.Euler(w.spinDeg, 0f, 0f);
-                if (artWheels != null && i < artWheels.Length && artWheels[i] != null)
+                if (artWheelsFollow && artWheels != null && i < artWheels.Length && artWheels[i] != null)
+                {
+                    artWheels[i].position = c;
+                    artWheels[i].rotation = transform.rotation * Quaternion.Euler(0f, w.steerDeg, 0f) * Quaternion.Euler(w.spinDeg, 0f, 0f);
+                }
+                else if (artWheels != null && i < artWheels.Length && artWheels[i] != null)
                     artWheels[i].localRotation = artWheelBase[i] * Quaternion.Euler(0f, w.front ? w.steerDeg : 0f, 0f) * Quaternion.Euler(w.spinDeg, 0f, 0f);
             }
 

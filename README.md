@@ -1,7 +1,7 @@
 # Indian Tractor Simulator 3D
 
 This is a Unity 6 project (built-in render pipeline with post-processing, C#) for **Android (APK)** and **Mac (DMG)**.
-It's on Stage 2, which adds:
+It's on Stage 3 (see below). Stage 2 added:
 
 * **Five tractors in a showroom:** GOLU CHAUDHARY GC-35, ANSHU SINGH AS-50, HALDHAR 47 DI, BHARAT VEER 60 4WD and the flagship **MOHIT SINGH MS-150 TURBO**.
   The flagship has 150 HP, 4WD, 16 forward + 4 reverse gears, a cab and a top speed of **120 km/h**. It's marked "Best tractor in the game".
@@ -10,12 +10,70 @@ It's on Stage 2, which adds:
   * **Trolleys** (single-axle 5 t, double-axle 10 t): an articulated drawbar joint, loadable cargo that raises the centre of gravity, trailer brakes, hydraulic tipping, sway, rollover and cargo spilling.
   * **3-point implements** (rotavator, cultivator, plough, disc harrow, seed drill, boom sprayer, land leveller): hydraulic lift and lower, PTO power taken from the engine, and soil drag that loads the tractor.
     The field changes colour where you've worked it, from stubble to cultivated, ploughed, rotavated, sown and sprayed. You're paid per square metre.
-* **Himalayan Cargo Route:** a 1.2 × 1.2 km Unity Terrain mountain with a roughly 3 km ghat road.
+* **Himalayan Cargo Route** (rebuilt in Stage 3): a 1.2 × 1.2 km Unity Terrain mountain with a roughly 3 km ghat road.
   It has hairpins, cliff drops with guard stones, mud and rock sections, a river ford and a 21 % pitch near the top.
   You load 4.5 t of apples at the depot, go through 7 checkpoints and tip the load at Pahadgaon.
 * **Village Farm:** the Stage 1 proving ground, plus an implement yard, the working field and a sugarcane run to the sugar mill.
 * **Money:** you earn from field work and deliveries, and pay for recovery (₹500) and for diesel/repairs.
 * **Real-art slots:** drop in Asset Store or Sketchfab models and textures to look truly realistic. See **ART_GUIDE.md**.
+
+## Stage 3: what's new
+
+* **Your FBX tractor is the game model.** `Assets/Art/Tractor/tractor.fbx` is processed automatically during the build (`TractorFbxImporter`). It:
+  * splits the merged wheel meshes into four separately spinning and steering wheels;
+  * separates the trolley into chassis, tipping bed and axle;
+  * measures the model, so the wheel radius, wheelbase, track and hitch point match the physics exactly.
+
+  Every brand uses the model, scaled to its size. The company name is on both bonnet sides.
+  **Textures:** the FBX points at Blender textures that aren't embedded. Copy the `textures_2k` folder (`vu_Base_color_1001.jpg`… `_1005`, plus Normal_OpenGL, Roughness, Metallic and Opacity) into `Assets/Art/Tractor/Textures/` and rebuild. They're picked up per UDIM tile. Until then the model is painted in each brand's colours.
+* **Faster, real-spec tractors:**
+
+  | Tractor | Power | Top speed |
+  |---|---|---|
+  | GOLU CHAUDHARY | 39 HP | 45 km/h |
+  | ANSHU SINGH | 55 HP | 55 km/h |
+  | HALDHAR | 50 HP | 50 km/h |
+  | BHARAT VEER | 75 HP, 4WD | 65 km/h |
+  | **MOHIT SINGH MS-210 TURBO** | 210 HP, 16 gears | **140 km/h** (0–100 km/h in about 30 s) |
+
+  The engine, clutch, gearbox, tyres, brakes and aero drag are all simulated. The headless physics test suite (18 checks) passes.
+* **Himalayan Ghat, rebuilt like a real hill road:**
+  * a 3.7 km asphalt road with lane markings;
+  * 12 legs stacked one above the other up a forested ridge, joined by 11 hairpin bends, climbing 245 m;
+  * legs at 7.5 % (one 11 % pitch), hairpins at 3 %, banked and widened for trolleys;
+  * crash barriers with chevrons on every hairpin, and guard stones along the drops;
+  * two landslide stretches, two slippery patches, milestones and hairpin numbers;
+  * a dhaba lay-by halfway, a depot in the valley and the Pahadgaon mandi at the top;
+  * clouds drifting in the valleys, snow on the peaks behind;
+  * **traffic** of cars, HRTC-style buses, trucks and autos. They drive on the left, slow down for hairpins, queue behind you and overtake on straights.
+
+  See `Docs/ghat_layout_top.png` and `Docs/ghat_layout_3d.png`, generated from the same algorithm.
+* **20 missions** (career). They unlock as you finish them, are paid with a speed bonus and have best times saved. Each mission has real rules: time limit, spill %, damage %, speed limit, night, fog and traffic level.
+
+  | # | Mission | Job |
+  |---|---|---|
+  | 1 | Gaon ki Sair | village loop |
+  | 2 | Kichad Mein Kamaal | mud |
+  | 3 | Pahadi Practice | hills |
+  | 4 | Ganna Mill Tak | 3 t cane |
+  | 5 | Khet Taiyar | rotavate 40 % |
+  | 6 | Eent Ki Dhulai | 4.5 t bricks |
+  | 7 | Reverse Ustaad | park the trolley in a shed |
+  | 8 | Raat Ki Ret | sand at night |
+  | 9 | Buwai Ka Mausam | sow 35 % |
+  | 10 | Bhaari Ganna | 9 t tandem |
+  | 11 | Ghat Darshan | drive the ghat |
+  | 12 | Dhaba Supply | rice to the dhaba |
+  | 13 | Seb Pahadgaon | apples uphill |
+  | 14 | Utraai Ka Khel | 5 t downhill, 40 km/h limit |
+  | 15 | Kohra | dense fog |
+  | 16 | Traffic Jam | heavy traffic, damage ≤ 25 % |
+  | 17 | Raat Ka Ghat | night |
+  | 18 | Ghaas Ka Pahad | hay, spill ≤ 10 % |
+  | 19 | Das Ton | 10 t |
+  | 20 | **Himalayan Legend** | night, fog, heavy traffic, 9 t |
+
+  Free roam is still available on both maps.
 
 ## 1. Get the APK (no local Unity needed)
 
@@ -109,6 +167,6 @@ Assets/Editor/PostFxSetup.cs   ← camera rig with post-processing (ACES, gradin
 
 ## 6. Next stages
 
-* **Stage 3:** traffic (bikes, autos, buses, trucks) and walking animals, plus weather: monsoon rain, mud forming, thunderstorms and a day/night cycle.
-* **Stage 4:** the remaining challenge tracks (desert, off-road, river crossing, the extreme Himalayan route) and a career with buying tractors and upgrades.
+* **Stage 4:** walking animals and weather: monsoon rain, mud forming, thunderstorms and a day/night cycle.
+* **Stage 5:** the remaining challenge tracks (desert, off-road, river crossing, the extreme Himalayan route) and a career with buying tractors and upgrades.
 * **Stage 5:** a garage with paint and upgrades, threshers/reapers/balers, loading by front loader, more maps, and optimisation for phones.

@@ -150,7 +150,7 @@ static class Program
         }
         s.Run(15);
         Console.WriteLine("  " + s.State());
-        Check(s.v * 3.6 > 27 && s.v * 3.6 < 34, "top speed in H4 ~31 km/h");
+        Check(s.v * 3.6 > s.d.Spec.TopSpeedKmh * 0.85 && s.v * 3.6 < s.d.Spec.TopSpeedKmh * 1.12, "top speed in H4 ~" + s.d.Spec.TopSpeedKmh + " km/h");
         Check(s.d.Gearbox.Label == "H4", "in H4");
 
         Console.WriteLine("7. Engine braking: lift off in H4");
@@ -171,7 +171,7 @@ static class Program
         string lastGear = "";
         s.Run(45, x => { if (x.d.Gearbox.Label != lastGear) { lastGear = x.d.Gearbox.Label; Console.WriteLine("    shift -> " + x.State()); } });
         Console.WriteLine("  " + s.State());
-        Check(s.d.Gearbox.Label == "H4" && s.v * 3.6 > 27, "auto reaches H4 ~30 km/h");
+        Check(s.d.Gearbox.Label == "H4" && s.v * 3.6 > s.d.Spec.TopSpeedKmh * 0.85, "auto reaches H4 top speed");
         Check(s.d.Engine.Running, "no stall in auto");
 
         Console.WriteLine("10. Automatic: brake to stop -> clutch frees, engine idles");
@@ -223,11 +223,11 @@ static class Program
             Check(t.d.Engine.Running && top > t.d.Spec.TopSpeedKmh * 0.88, id + " reaches ~its rated top speed");
             if (id == "mohit150") mohitTop = top;
         }
-        Check(mohitTop > 110, "Mohit Singh does 110+ km/h (" + mohitTop.ToString("F0") + ")");
+        Check(mohitTop > 130, "Mohit Singh does 130+ km/h (" + mohitTop.ToString("F0") + ")");
         bool fastest = true; foreach (var kv in tops) if (kv.Key != "mohit150" && kv.Value >= mohitTop) fastest = false;
         Check(fastest, "Mohit Singh is the fastest tractor");
 
-        Console.WriteLine("17. Mohit Singh: 0-100 km/h and braking from 120");
+        Console.WriteLine("17. Mohit Singh: 0-100 km/h and braking from top speed");
         var m = StartedSim(TransmissionMode.Automatic, "mohit150");
         m.crr = 0.016; m.d.ThrottleInput = 1f; double t100 = -1; double t0 = m.t;
         m.Run(120, x => { if (t100 < 0 && x.v * 3.6 >= 100) t100 = x.t - t0; });
@@ -235,7 +235,7 @@ static class Program
         double bd = 0; m.d.ThrottleInput = 0; m.brake = 1f; m.Run(15, x => bd += Math.Max(0, x.v) * 0.01);
         Console.WriteLine("  stopped in " + bd.ToString("F0") + " m");
         Check(t100 > 0 && t100 < 60, "reaches 100 km/h");
-        Check(bd > 40 && bd < 140 && m.v < 0.2, "stops from top speed in a plausible distance");
+        Check(bd > 40 && bd < 160 && m.v < 0.2, "stops from top speed in a plausible distance");
 
         Console.WriteLine("18. 4WD vs 2WD: muddy 6 deg slope with a 2 t trolley");
         var two = StartedSim(TransmissionMode.Automatic, "anshu50"); two.mu = 0.36; two.crr = 0.08; two.slopeDeg = 6; two.extraMass = 2000; two.d.ThrottleInput = 1f; two.Run(25);

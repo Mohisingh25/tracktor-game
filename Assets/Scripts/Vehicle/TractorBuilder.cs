@@ -19,6 +19,13 @@ namespace TractorSim
             root.transform.SetPositionAndRotation(pos, rot);
             root.layer = TractorLayer;
 
+            // the user's FBX tractor (if imported) sets wheel sizes, wheelbase and track for every brand
+            var cat = ArtCatalog.Load();
+            bool hasArt = cat != null && cat.FindTractor(spec.id) != null && cat.FindTractor(spec.id).model != null;
+            var rig = hasArt ? null : TractorRigInfo.Load();
+            GameObject rigPrefab = rig != null ? TractorRigInfo.TractorPrefab() : null;
+            if (rigPrefab != null) rig.ApplyTo(spec);
+
             // ---------------- physics body ----------------
             var rb = root.AddComponent<Rigidbody>();
             rb.mass = spec.massKg;
@@ -70,10 +77,13 @@ namespace TractorSim
             var vis = root.AddComponent<TractorVisuals>();
             BuildModel(root.transform, spec, vis, wheels);
             ApplyArt(root.transform, spec, vis);
+            if (rigPrefab != null) ApplyRig(root.transform, spec, vis, rig, rigPrefab);
             vis.Init(controller, physics);
 
             // ---------------- hitch points & attachment manager ----------------
-            var drawbar = Anchor(root.transform, "HitchDrawbar", new Vector3(0, 0.5f * sc, zr - 0.72f * sc));
+            var drawbar = Anchor(root.transform, "HitchDrawbar", rigPrefab != null && rig.hasTrolley
+                ? new Vector3(0, 0.5f, rig.hitchZ * sc)
+                : new Vector3(0, 0.5f * sc, zr - 0.72f * sc));
             var threePoint = Anchor(root.transform, "Hitch3P", new Vector3(0, 0.55f * sc, zr - 0.55f * sc));
             var am = root.AddComponent<AttachmentManager>();
             am.Init(controller, drawbar, threePoint);
@@ -405,6 +415,65 @@ namespace TractorSim
                 if (vis.artWheels[i] != null) any = true;
             }
             if (any && vis.wheelRoots != null) foreach (var w in vis.wheelRoots) if (w != null) w.gameObject.SetActive(false);
+        }
+
+        // ---------------- the imported FBX tractor ----------------
+        static void ApplyRig(Transform root, TractorSpec spec, TractorVisuals vis, TractorRigInfo rig, GameObject prefab)
+        {
+            float k = spec.bodyScale;
+            var model = Object.Instantiate(prefab);
+            model.name = "RigModel";
+            model.transform.SetParent(vis.bodyRoot.parent, false);
+            model.transform.localPosition = Vector3.zero;
+            model.transform.localRotation = Quaternion.identity;
+            model.transform.localScale = Vector3.one * k;
+            foreach (var c in model.GetComponentsInChildren<Collider>(true)) Object.Destroy(c);
+
+            // hide the procedural body but keep the driver, lights and particle effects working
+            var keep = vis.driver;
+            foreach (var r in vis.bodyRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r is ParticleSystemRenderer) continue;
+                if (keep != null && r.transform.IsChildOf(keep)) continue;
+                r.enabled = false;
+            }
+            if (vis.wheelRoots != null) foreach (var w in vis.wheelRoots) if (w != null) w.gameObject.SetActive(false);
+
+            // untextured import: paint the body in the brand colour so each company still looks different
+            if (!rig.textured)
+            {
+                var body = model.transform.Find("Body");
+                if (body != null)
+                {
+                    var paint = MatLib.Opaque(C(spec.bodyRgb), 0.6f, 0.15f);
+                    foreach (var r in body.GetComponentsInChildren<Renderer>(true)) r.sharedMaterial = paint;
+                }
+            }
+
+            // wheels from the model, driven by the suspension
+            vis.artWheels = new Transform[4];
+            var names = new[] { "Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR" };
+            for (int i = 0; i < 4; i++) vis.artWheels[i] = model.transform.Find(names[i]);
+            vis.artWheelsFollow = true;
+
+            // driver on the model's seat, cockpit camera at his eyes, smoke from the model's exhaust
+            Vector3 seat = rig.seat * k;
+            if (vis.driver != null)
+            {
+                Vector3 procSeat = vis.bodyRoot.TransformPoint(new Vector3(0f, 1.22f, -0.82f));
+                vis.driver.position += root.TransformPoint(seat) - procSeat;
+            }
+            if (vis.cockpitEye != null) vis.cockpitEye.position = root.TransformPoint(seat + new Vector3(0f, 0.8f, 0.02f) * k);
+            if (vis.exhaust != null) vis.exhaust.transform.position = root.TransformPoint(rig.exhaustTop * k);
+
+            // company name on both bonnet sides, highlighted
+            var brand = new GameObject("RigBrand").transform; brand.SetParent(model.transform, false);
+            Color ink = rig.textured ? new Color(1f, 0.85f, 0.1f) : Color.Lerp(C(spec.accentRgb), Color.white, 0.3f);
+            for (int sgn = -1; sgn <= 1; sgn += 2)
+            {
+                AddDecal(brand, spec.brand, new Vector3(sgn * rig.hoodSide.x, rig.hoodSide.y, rig.hoodSide.z), new Vector3(0, -90 * sgn, 0), 0.0105f / k * 1.6f, ink, spec.brand.Length > 12 ? 0.85f : 1f);
+                AddDecal(brand, spec.model, new Vector3(sgn * rig.hoodSide.x, rig.hoodSide.y - 0.17f, rig.hoodSide.z + 0.2f), new Vector3(0, -90 * sgn, 0), 0.008f, Color.white, 1f);
+            }
         }
 
         static Transform FindDeep(Transform t, string name)

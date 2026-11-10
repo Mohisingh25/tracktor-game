@@ -41,7 +41,7 @@ namespace TractorSim
 
         // --- Engine ---
         public int cylinders = 3;
-        public float ratedPowerHp = 47f;
+        public float ratedPowerHp = 50f;
         public float idleRpm = 850f;
         public float ratedRpm = 2100f;
         public float highIdleRpm = 2260f;
@@ -60,8 +60,8 @@ namespace TractorSim
 
         // --- Transmission: speeds (km/h) at rated rpm, grouped by range (gearsPerRange each) ---
         public int gearsPerRange = 4;
-        public float[] forwardSpeedsKmh = { 2.9f, 4.2f, 5.7f, 8.4f, 10.8f, 15.4f, 20.6f, 30.8f };
-        public float[] reverseSpeedsKmh = { 4.0f, 14.6f };
+        public float[] forwardSpeedsKmh = { 3.4f, 4.9f, 6.7f, 9.8f, 14f, 21f, 32f, 50f };
+        public float[] reverseSpeedsKmh = { 4.5f, 16f };
         public string[] rangeNames = { "L", "H" };
         public float drivelineEfficiency = 0.86f;
         public float clutchMaxTorqueNm = 290f;
@@ -152,16 +152,16 @@ namespace TractorSim
         {
             var s = new TractorSpec();
             s.id = "golu35"; s.brand = "GOLU CHAUDHARY"; s.model = "GC-35"; s.tagline = "Chhota packet, bada dhamaka";
-            s.description = "35 HP 3-cylinder, 8F + 2R, 2WD. Light, nimble and thrifty on diesel.";
+            s.description = "39 HP 3-cylinder, 8F + 2R, 2WD. Light, nimble and thrifty on diesel. 45 km/h road gear.";
             s.stars = 2;
             s.bodyRgb = new[] { 0.78f, 0.08f, 0.06f }; s.accentRgb = new[] { 0.95f, 0.95f, 0.93f }; s.rimRgb = new[] { 0.85f, 0.83f, 0.78f };
             s.style = BodyStyle.Canopy; s.bodyScale = 0.94f;
             s.massKg = 1650f; s.wheelBase = 1.86f; s.trackRear = 1.42f; s.trackFront = 1.3f;
             s.rearWheelRadius = 0.63f; s.frontWheelRadius = 0.37f; s.rearWheelWidth = 0.32f; s.frontWheelWidth = 0.15f;
-            s.ratedPowerHp = 35f; s.SetTorqueCurve(140f, 2100f); s.idleRpm = 820f; s.engineInertia = 1.1f;
+            s.ratedPowerHp = 39f; s.SetTorqueCurve(158f, 2200f); s.idleRpm = 820f; s.engineInertia = 1.1f;
             s.fuelTankL = 42f; s.clutchMaxTorqueNm = 210f;
-            s.forwardSpeedsKmh = new[] { 2.6f, 3.8f, 5.2f, 7.6f, 9.8f, 14.0f, 19.0f, 28.0f };
-            s.reverseSpeedsKmh = new[] { 3.6f, 13.2f };
+            s.forwardSpeedsKmh = new[] { 3.5f, 5f, 7f, 10f, 15f, 22f, 32f, 45f };
+            s.reverseSpeedsKmh = new[] { 4.2f, 15f };
             s.brakeTorquePerRearWheel = 3800f; s.handbrakeTorque = 5000f;
             s.maxLiftKg = 1000f; s.maxTowKg = 5000f;
             s.rearWheelInertia = 26f;
@@ -173,17 +173,17 @@ namespace TractorSim
         {
             var s = new TractorSpec();
             s.id = "anshu50"; s.brand = "ANSHU SINGH"; s.model = "AS-50"; s.tagline = "Kheton ka raja";
-            s.description = "50 HP 3-cylinder, 12F + 3R (3 ranges), 2WD, power steering. Pulls heavy trolleys all day.";
+            s.description = "55 HP 3-cylinder, 12F + 3R (3 ranges), 2WD, power steering. Pulls heavy trolleys all day. 55 km/h.";
             s.stars = 3;
             s.bodyRgb = new[] { 0.08f, 0.25f, 0.62f }; s.accentRgb = new[] { 0.92f, 0.92f, 0.9f }; s.rimRgb = new[] { 0.85f, 0.75f, 0.2f };
             s.style = BodyStyle.Canopy; s.bodyScale = 1.03f;
             s.massKg = 2150f; s.wheelBase = 2.02f; s.trackRear = 1.56f; s.trackFront = 1.42f;
             s.rearWheelRadius = 0.7f; s.frontWheelRadius = 0.4f; s.rearWheelWidth = 0.4f;
-            s.ratedPowerHp = 50f; s.SetTorqueCurve(210f, 2000f); s.engineInertia = 1.45f;
+            s.ratedPowerHp = 55f; s.SetTorqueCurve(230f, 2100f); s.engineInertia = 1.45f;
             s.fuelTankL = 60f; s.clutchMaxTorqueNm = 320f;
             s.gearsPerRange = 4; s.rangeNames = new[] { "L", "M", "H" };
-            s.forwardSpeedsKmh = new[] { 2.3f, 3.1f, 4.2f, 5.6f, 6.8f, 8.9f, 11.6f, 15.0f, 17.5f, 22.0f, 27.5f, 34.0f };
-            s.reverseSpeedsKmh = new[] { 3.4f, 9.0f, 16.0f };
+            s.forwardSpeedsKmh = new[] { 3f, 4f, 5.5f, 7.5f, 9.5f, 12.5f, 16f, 21f, 27f, 35f, 44f, 55f };
+            s.reverseSpeedsKmh = new[] { 4f, 10f, 18f };
             s.brakeTorquePerRearWheel = 5000f; s.steerRateDegPerSec = 95f;
             s.maxLiftKg = 1800f; s.maxTowKg = 10000f;
             s.rearWheelInertia = 34f;
@@ -194,6 +194,8 @@ namespace TractorSim
         {
             var s = new TractorSpec();   // the original Stage-1 tractor
             s.stars = 3; s.tagline = "Reliable all-rounder";
+            s.SetTorqueCurve(205f, 2200f); s.model = "50 DI";
+            s.description = "50 HP 3-cylinder, 8F + 2R sliding mesh, 2WD. 50 km/h road gear.";
             return s;
         }
 
@@ -201,18 +203,18 @@ namespace TractorSim
         static TractorSpec BharatVeer()
         {
             var s = new TractorSpec();
-            s.id = "bharatveer60"; s.brand = "BHARAT VEER"; s.model = "60 4WD"; s.tagline = "Mitti ho ya pahaad";
-            s.description = "60 HP 4-cylinder, 12F + 3R, four-wheel drive. Best grip in mud and on mountains.";
+            s.id = "bharatveer60"; s.brand = "BHARAT VEER"; s.model = "75 4WD"; s.tagline = "Mitti ho ya pahaad";
+            s.description = "75 HP 4-cylinder, 12F + 3R, four-wheel drive. Best grip in mud and on mountains. 65 km/h.";
             s.stars = 4;
             s.bodyRgb = new[] { 0.12f, 0.42f, 0.18f }; s.accentRgb = new[] { 0.95f, 0.8f, 0.15f }; s.rimRgb = new[] { 0.95f, 0.8f, 0.15f };
             s.style = BodyStyle.Canopy; s.bodyScale = 1.08f;
             s.massKg = 2600f; s.wheelBase = 2.15f; s.trackRear = 1.62f; s.trackFront = 1.55f;
             s.rearWheelRadius = 0.74f; s.frontWheelRadius = 0.5f; s.rearWheelWidth = 0.42f; s.frontWheelWidth = 0.26f;
-            s.cylinders = 4; s.ratedPowerHp = 60f; s.SetTorqueCurve(255f, 2100f); s.engineInertia = 1.6f;
+            s.cylinders = 4; s.ratedPowerHp = 75f; s.SetTorqueCurve(310f, 2200f); s.engineInertia = 1.6f;
             s.fuelTankL = 65f; s.clutchMaxTorqueNm = 390f;
             s.gearsPerRange = 4; s.rangeNames = new[] { "L", "M", "H" };
-            s.forwardSpeedsKmh = new[] { 2.1f, 2.9f, 3.9f, 5.2f, 6.5f, 8.6f, 11.2f, 14.8f, 18.0f, 23.0f, 29.5f, 38.0f };
-            s.reverseSpeedsKmh = new[] { 3.0f, 8.5f, 17.0f };
+            s.forwardSpeedsKmh = new[] { 2.8f, 3.8f, 5.1f, 6.9f, 8.8f, 11.5f, 15f, 20f, 27f, 37f, 50f, 65f };
+            s.reverseSpeedsKmh = new[] { 3.5f, 10f, 20f };
             s.fourWheelDrive = true; s.frontBrakes = false;
             s.brakeTorquePerRearWheel = 5800f; s.steerRateDegPerSec = 95f; s.maxSteerDeg = 34f;
             s.frontSpring = 110000f; s.frontDamper = 5200f;
@@ -225,26 +227,26 @@ namespace TractorSim
         static TractorSpec MohitSingh()
         {
             var s = new TractorSpec();
-            s.id = "mohit150"; s.brand = "MOHIT SINGH"; s.model = "MS-150 TURBO"; s.tagline = "Sabse taqatwar. Sabse tez.";
-            s.description = "150 HP 6-cylinder turbo diesel, 16F + 4R, 4WD, front suspension, 4-wheel brakes, air-con cab. Up to 120 km/h.";
+            s.id = "mohit150"; s.brand = "MOHIT SINGH"; s.model = "MS-210 TURBO"; s.tagline = "Sabse taqatwar. Sabse tez.";
+            s.description = "210 HP 6-cylinder turbo diesel, 16F + 2R, 4WD, front suspension, 4-wheel brakes, air-con cab. Up to 140 km/h.";
             s.stars = 5; s.flagship = true;
             s.bodyRgb = new[] { 0.06f, 0.06f, 0.07f }; s.accentRgb = new[] { 0.95f, 0.72f, 0.18f }; s.rimRgb = new[] { 0.95f, 0.72f, 0.18f };
             s.style = BodyStyle.Cabin; s.bodyScale = 1.25f;
             s.massKg = 4800f; s.wheelBase = 2.75f; s.trackRear = 1.9f; s.trackFront = 1.85f;
             s.rearWheelRadius = 0.86f; s.frontWheelRadius = 0.64f; s.rearWheelWidth = 0.55f; s.frontWheelWidth = 0.42f;
             s.centerOfMassHeight = 0.95f; s.centerOfMassZ = -0.1f;
-            s.cylinders = 6; s.ratedPowerHp = 150f; s.SetTorqueCurve(640f, 2200f); s.idleRpm = 800f; s.engineInertia = 2.6f;
+            s.cylinders = 6; s.ratedPowerHp = 210f; s.SetTorqueCurve(860f, 2200f); s.idleRpm = 800f; s.engineInertia = 2.6f;
             s.starterTorqueNm = 160f; s.stallRpm = 360f;
             s.fuelTankL = 260f; s.bsfcKgPerKWh = 0.215f; s.idleFuelLph = 1.4f;
-            s.clutchMaxTorqueNm = 950f; s.drivelineEfficiency = 0.88f;
+            s.clutchMaxTorqueNm = 1250f; s.drivelineEfficiency = 0.88f;
             s.gearsPerRange = 8; s.rangeNames = new[] { "L", "H" }; s.rangeShiftOnTheMove = true;
-            s.forwardSpeedsKmh = new[] { 2.5f, 3.5f, 4.8f, 6.5f, 8.8f, 12f, 16f, 21f, 26f, 32f, 40f, 50f, 62f, 77f, 96f, 120f };
-            s.reverseSpeedsKmh = new[] { 4.5f, 18f };
+            s.forwardSpeedsKmh = new[] { 3f, 4.2f, 5.8f, 8f, 11f, 15f, 20f, 26f, 33f, 42f, 53f, 66f, 80f, 96f, 116f, 140f };
+            s.reverseSpeedsKmh = new[] { 5f, 20f };
             s.fourWheelDrive = true; s.frontBrakes = true;
             s.brakeTorquePerRearWheel = 14000f; s.brakeTorquePerFrontWheel = 8000f; s.handbrakeTorque = 14000f;
             s.frontSpring = 190000f; s.frontDamper = 14000f; s.frontTravel = 0.16f;
             s.rearSpring = 330000f; s.rearDamper = 16000f; s.rearTravel = 0.07f;
-            s.dragArea = 2.6f; s.maxSteerDeg = 38f; s.steerRateDegPerSec = 110f; s.tractionFactor = 1.08f;
+            s.dragArea = 2.2f; s.maxSteerDeg = 38f; s.steerRateDegPerSec = 110f; s.tractionFactor = 1.08f;
             s.maxLiftKg = 6500f; s.maxTowKg = 24000f;
             s.rearWheelInertia = 70f;
             return s;

@@ -30,6 +30,8 @@ namespace TractorSim
         public int mapId;
         public int deliveries;
         public float bestMountainSec;
+        public long missionMask;              // bit i = mission i completed
+        public float[] missionBest = new float[20];
     }
 
     /// <summary>Local persistence (PlayerPrefs + JsonUtility). Survives app restarts.</summary>
