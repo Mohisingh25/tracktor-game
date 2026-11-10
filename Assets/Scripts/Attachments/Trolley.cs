@@ -52,7 +52,7 @@ namespace TractorSim
             float bedFront = -1.4f;
             // the user's FBX tractor comes with a single-axle trolley: use its exact dimensions
             var rig = !tandem ? TractorRigInfo.Load() : null;
-            GameObject rigPrefab = rig != null && rig.hasTrolley ? TractorRigInfo.TrolleyPrefab() : null;
+            GameObject rigPrefab = rig != null && rig.hasTrolley ? TractorModel.BuildTrolley() : null;
             if (rigPrefab != null)
             {
                 L = rig.trolleyBedLength; W = rig.trolleyBedWidth; H = rig.trolleySideHeight;
@@ -156,7 +156,8 @@ namespace TractorSim
         {
             foreach (var r in vis.GetComponentsInChildren<Renderer>(true)) if (r.transform != t.cargoVis) r.enabled = false;
             foreach (var w in t.wheels) if (w.vis != null) foreach (var r in w.vis.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
-            var m = Object.Instantiate(prefab, t.transform);
+            var m = prefab;                            // built by TractorModel for this trolley
+            m.transform.SetParent(t.transform, false);
             m.name = "RigModel";
             m.transform.localPosition = new Vector3(0f, 0.5f, 0f);      // prefab origin = hitch eye, 0.5 m above ground
             m.transform.localRotation = Quaternion.identity;

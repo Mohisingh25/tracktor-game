@@ -23,7 +23,7 @@ namespace TractorSim
             var cat = ArtCatalog.Load();
             bool hasArt = cat != null && cat.FindTractor(spec.id) != null && cat.FindTractor(spec.id).model != null;
             var rig = hasArt ? null : TractorRigInfo.Load();
-            GameObject rigPrefab = rig != null ? TractorRigInfo.TractorPrefab() : null;
+            GameObject rigPrefab = rig != null ? TractorModel.BuildTractor(C(spec.bodyRgb), spec.flagship ? 0.25f : 0.38f) : null;
             if (rigPrefab != null) rig.ApplyTo(spec);
 
             // ---------------- physics body ----------------
@@ -421,7 +421,7 @@ namespace TractorSim
         static void ApplyRig(Transform root, TractorSpec spec, TractorVisuals vis, TractorRigInfo rig, GameObject prefab)
         {
             float k = spec.bodyScale;
-            var model = Object.Instantiate(prefab);
+            var model = prefab;                       // built by TractorModel for this tractor
             model.name = "RigModel";
             model.transform.SetParent(vis.bodyRoot.parent, false);
             model.transform.localPosition = Vector3.zero;

@@ -34,7 +34,7 @@ namespace TractorSim
 
         TractorController tractor;
         AttachmentManager hitch;
-        float damage0, overspeed, parkedFor, speedWarn;
+        float damage0, overspeed, parkedFor, speedWarn, overturnedFor;
         float TargetKg { get { return def != null ? def.tons * 1000f : 0f; } }
 
         // ------------------------------------------------------------------ factory
@@ -69,7 +69,7 @@ namespace TractorSim
         {
             tractor = t;
             hitch = t.GetComponent<AttachmentManager>();
-            NextCheckpoint = 0; Timer = 0f; DeliveredKg = 0f; LoadedKg = 0f; overspeed = 0f; parkedFor = 0f; Paid = 0;
+            NextCheckpoint = 0; Timer = 0f; DeliveredKg = 0f; LoadedKg = 0f; overspeed = 0f; parkedFor = 0f; overturnedFor = 0f; Paid = 0;
             damage0 = t.Damage;
             ResultText = null;
             Active = true;
@@ -253,8 +253,10 @@ namespace TractorSim
             if (Timer > def.timeLimitSec) { Fail("Time is up"); return false; }
             float dmg = tractor.Damage - damage0;
             if (def.maxDamage >= 0f && dmg > def.maxDamage) { Fail("Too much damage (" + Mathf.RoundToInt(dmg) + "%)"); return false; }
-            if (t != null && t.IsTipped) { Fail("Trolley overturned"); return false; }
-            if (tractor.transform.up.y < 0.3f) { Fail("Tractor overturned"); return false; }
+            // overturning only counts when it lasts (a wheel in the air or a bounce at spawn is not a rollover)
+            bool over = tractor.transform.up.y < 0.3f, tOver = t != null && t.IsTipped;
+            overturnedFor = (over || tOver) && Timer > 3f ? overturnedFor + Time.deltaTime : 0f;
+            if (overturnedFor > 2.5f) { Fail(over ? "Tractor overturned – drive slower on slopes and bends" : "Trolley overturned"); return false; }
             if ((Step == MissionStep.Deliver || Step == MissionStep.Unload) && LoadedKg > 0f && t != null)
             {
                 float lost = t.Spilled / LoadedKg;
