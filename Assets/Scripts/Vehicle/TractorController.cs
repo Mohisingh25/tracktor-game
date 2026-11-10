@@ -159,6 +159,25 @@ namespace TractorSim
         void Shift(int dir)
         {
             int target = Gearbox.Gear + dir;
+            // past the top / bottom gear of a range: roll over into the next range (L8 -> H1, H1 -> L8)
+            bool up = dir > 0 && Gearbox.Gear == Spec.gearsPerRange && Gearbox.Range < Gearbox.RangeCount - 1;
+            bool down = dir < 0 && Gearbox.Gear == 1 && Gearbox.Range > 0;
+            if (up || down)
+            {
+                if (!Drivetrain.ClutchFree) { Gearbox.TrySetGear(-99, false); Grind(); return; }
+                if (!Spec.rangeShiftOnTheMove && Mathf.Abs(Physics.SpeedKmh) > 2.5f)
+                {
+                    Msg(up ? "Top gear of " + Gearbox.RangeName(Gearbox.Range) + " range – stop and press RANGE for faster gears" : "Stop and press RANGE for slower gears", true);
+                    return;
+                }
+                int range = Gearbox.Range + (up ? 1 : -1);
+                if (Gearbox.TrySetRange(range, true, Physics.SpeedKmh) && Gearbox.TrySetGear(up ? 1 : Spec.gearsPerRange, true))
+                {
+                    Msg("Range " + Gearbox.RangeName(range), false);
+                    if (OnShift != null) OnShift();
+                }
+                return;
+            }
             if (target < -1 || target > Spec.gearsPerRange) return;
             if (Gearbox.TrySetGear(target, Drivetrain.ClutchFree)) { if (OnShift != null) OnShift(); }
             else Grind();
